@@ -6,13 +6,27 @@ import (
 )
 
 type JavaClass struct {
-	ClassName string
-	Fields    []Field
+	ClassName  string
+	Attributes []Attribute
+	Methods    []Method
 }
 
-type Field struct {
-	Name string
-	Type string
+// Attribute ClassVariable/ True, falls es sich um eine Klassenvariable handelt */
+// Attribute Constant/ True, falls es sich um eine Konstante handelt
+type Attribute struct {
+	AccessModifier string
+	Name           string
+	Type           string
+	ClassVariable  bool
+	Constant       bool
+}
+
+type Method struct {
+	AccessModifier string
+	Name           string
+	Type           string
+	Parameters     []Attribute
+	Body           string
 }
 
 func main() {
@@ -50,9 +64,12 @@ func main() {
 
 	daten_class_diagram := JavaClass{
 		ClassName: "TestClass",
-		Fields: []Field{
-			{"name", "string"},
-			{"age", "int"},
+		Attributes: []Attribute{
+			{"private", "name", "string", false, false},
+			{"public", "age", "int", false, false},
+			{"public", "numbPopulation", "int", true, false},
+			{"public", "PI", "double", true, true},
+			{"public", "MAXAGE", "int", false, true},
 		},
 	}
 	err = template_class.Execute(os.Stdout, daten_class_diagram)
