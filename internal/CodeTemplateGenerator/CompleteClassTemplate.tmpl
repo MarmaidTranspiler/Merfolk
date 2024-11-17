@@ -1,4 +1,4 @@
-public class {{.ClassName}} {
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}} {
     {{- range .Attributes }}
     {{.AccessModifier}}{{if .ClassVariable}} static{{end}}{{if .Constant}} final{{end}} {{.Type}} {{.Name}};
     {{- end }}

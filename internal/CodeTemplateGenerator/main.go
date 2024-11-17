@@ -7,6 +7,7 @@ import (
 
 type JavaClass struct {
 	ClassName  string
+	Inherits   string
 	Attributes []Attribute
 	Methods    []Method
 }
@@ -64,6 +65,7 @@ func main() {
 
 	daten_class_diagram := JavaClass{
 		ClassName: "TestClass",
+		Inherits:  "Test",
 		Attributes: []Attribute{
 			{"private", "name", "string", false, false},
 			{"public", "age", "int", false, false},
