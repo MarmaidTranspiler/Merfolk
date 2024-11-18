@@ -1,15 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"text/template"
 )
 
 type JavaClass struct {
-	ClassName  string
-	Inherits   string
-	Attributes []Attribute
-	Methods    []Method
+	ClassName   string
+	Abstraction string
+	Inherits    string
+	Attributes  []Attribute
+	Methods     []Method
 }
 
 // Attribute ClassVariable/ True, falls es sich um eine Klassenvariable handelt */
@@ -20,6 +22,7 @@ type Attribute struct {
 	Type           string
 	ClassVariable  bool
 	Constant       bool
+	Value          any
 }
 
 type Method struct {
@@ -28,6 +31,13 @@ type Method struct {
 	Type           string
 	Parameters     []Attribute
 	Body           string
+}
+
+type InterfaceClass struct {
+	InterfaceName      string
+	Inherits           string
+	AbstractAttributes []Attribute
+	AbstractMethods    []Method
 }
 
 func main() {
@@ -55,27 +65,67 @@ func main() {
 			}
 			return string(str[0]^32) + str[1:]
 		},
+		"stringFormation": func(typeName string, value any) any {
+			// Fehler bei nil verhindern
+			if value == nil {
+				return "null"
+			}
+			switch typeName {
+			case "String":
+				return fmt.Sprintf("\"%v\"", value)
+			default:
+				return value
+			}
+		},
 	}
 
-	template_class, err := template.New("CompleteClassTemplate.tmpl").Funcs(funcMap).ParseFiles("CompleteClassTemplate.tmpl")
+	class_temp, err := template.New("CompleteClassTemplate.tmpl").Funcs(funcMap).ParseFiles("CompleteClassTemplate.tmpl")
 
 	if err != nil {
 		panic(err)
 	}
 
-	daten_class_diagram := JavaClass{
+	interface_temp, err := template.New("InterfaceTemplate.tmpl").Funcs(funcMap).ParseFiles("InterfaceTemplate.tmpl")
+
+	if err != nil {
+		panic(err)
+	}
+
+	datenClassDiagram := JavaClass{
 		ClassName: "TestClass",
 		Inherits:  "Test",
 		Attributes: []Attribute{
-			{"private", "name", "string", false, false},
-			{"public", "age", "int", false, false},
-			{"public", "numbPopulation", "int", true, false},
-			{"public", "PI", "double", true, true},
-			{"public", "MAXAGE", "int", false, true},
+			{"private", "name", "String", false, false, ""},
+			{"public", "age", "int", false, false, ""},
+			{"public", "numbPopulation", "int", true, false, "8 Milliarden"},
+			{"public", "PI", "double", true, true, 3.124},
+			{"public", "MAXAGE", "int", false, true, ""},
 		},
 	}
-	err = template_class.Execute(os.Stdout, daten_class_diagram)
+	err = class_temp.Execute(os.Stdout, datenClassDiagram)
 	if err != nil {
 		panic(err)
 	}
+
+	datenInterfaceDiagram := InterfaceClass{
+		InterfaceName: "InterfaceTest",
+		Inherits:      "",
+		AbstractAttributes: []Attribute{
+			{"", "coll", "Database", false, false, "new Database"},
+			{"", "Jahrtausend", "int", false, false, 2100},
+			{"", "name", "String", true, false, "Helmut"},
+			{"", "PI", "double", true, true, ""},
+			{"", "MAXAGE", "int", false, true, ""},
+		},
+		AbstractMethods: []Method{
+			{Type: "void", Name: "doSomething"},
+			{Type: "String", Name: "getName"},
+		},
+	}
+
+	err = interface_temp.Execute(os.Stdout, datenInterfaceDiagram)
+	if err != nil {
+		panic(err)
+	}
+
 }
