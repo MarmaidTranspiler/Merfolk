@@ -1,6 +1,6 @@
-public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}} {
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}} {{else if .Abstraction}} implements {{.Inherits}}{{end}} {
     {{- range .Attributes }}
-    {{.AccessModifier}}{{if .ClassVariable}} static{{end}}{{if .Constant}} final{{end}} {{.Type}} {{.Name}};
+    {{.AccessModifier}}{{if .ClassVariable}} static{{end}}{{if .Constant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
     {{- end }}
 
     // Standardkonstruktor
@@ -13,7 +13,9 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}} {
     }
 
     // Konstruktor mit allen Parametern
-    public {{.ClassName}}({{range $index, $field := .Attributes}}{{if and (not .ClassVariable) (not .Constant) }}, {{end}} {{- if and (not .ClassVariable) (not .Constant) }}{{$field.Type}} {{$field.Name}}{{end}}{{end}}) {
+    public {{.ClassName}}(
+    {{- range $index, $field := .Attributes }}
+        {{- if and (not $field.ClassVariable) (not $field.Constant) }}{{- if $index }}, {{ end }}{{$field.Type}} {{$field.Name}} {{- end }}{{- end }}) {
         {{- range .Attributes }}
         {{- if and (not .ClassVariable) (not .Constant) }}
         this.{{.Name}} = {{.Name}};
