@@ -6,12 +6,12 @@ import (
 )
 
 type ClassDiagram struct {
-	Instructions []*Instruction `@@*`
+	Instructions []*ClassInstruction `@@*`
 }
 
-type Instruction struct {
+type ClassInstruction struct {
 	Relationship *Relationship `  @@`
-	Member       *Member       `| @@`
+	Member       *ClassMember  `| @@`
 	Annotation   *Annotation   `| @@`
 }
 
@@ -24,7 +24,7 @@ type Relationship struct {
 	Label            string `( ":" @Word )?`
 }
 
-type Member struct {
+type ClassMember struct {
 	Class      string     `@Word ":"`
 	Visibility string     `@Visibility?`
 	Attribute  *Parameter `@@?`
@@ -33,7 +33,7 @@ type Member struct {
 
 type Operation struct {
 	Name       string       `@Word`
-	Parameters []*Parameter `"(" ( @@ ( ","? @@ )* )? ")"`
+	Parameters []*Parameter `"(" ( @@ ( "," @@ )* )? ")"`
 	Return     string       `@Word?`
 }
 
@@ -48,7 +48,7 @@ type Annotation struct {
 }
 
 var (
-	Lexer = lexer.MustSimple([]lexer.SimpleRule{
+	ClassDiagramLexer = lexer.MustSimple([]lexer.SimpleRule{
 		{"Word", `[a-zA-Z]\w*`},
 		{"Claw", `(<<)|(>>)`},
 		{"Special", `[,:\(\)]`},
@@ -59,8 +59,8 @@ var (
 		{"whitespace", `\s+`},
 	})
 
-	Parser = participle.MustBuild[ClassDiagram](
-		participle.Lexer(Lexer),
+	ClassDiagramParser = participle.MustBuild[ClassDiagram](
+		participle.Lexer(ClassDiagramLexer),
 		participle.Unquote("Cardinality"),
 	)
 )
