@@ -1,4 +1,4 @@
-package parser
+package reader
 
 import (
 	"github.com/alecthomas/participle/v2"
@@ -60,6 +60,7 @@ type Switch struct {
 
 var (
 	SequenceDiagramLexer = lexer.MustSimple([]lexer.SimpleRule{
+		{"diagramType", `sequenceDiagram`},
 		{"Keyword", `(?i)(participant|actor|as|create|destroy|(de)?activate)`},
 		{"Special", `[:,\(\)]`},
 		{"Arrow", `((<<)?--?>>)|(--?[>x)])`},
