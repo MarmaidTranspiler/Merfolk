@@ -1,0 +1,10 @@
+public interface {{.InterfaceName}} {{- if .Inherits}} extends {{.Inherits}}{{- end}} {
+
+{{- range .AbstractAttributes }}
+    public {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{- end}};
+{{- end }}
+
+{{- range .AbstractMethods }}
+    public {{.Type}} {{.Name}}();
+{{- end }}
+}
