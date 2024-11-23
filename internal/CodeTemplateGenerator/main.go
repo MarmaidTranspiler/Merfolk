@@ -8,7 +8,7 @@ import (
 
 type JavaClass struct {
 	ClassName   string
-	Abstraction string
+	Abstraction []string
 	Inherits    string
 	Attributes  []Attribute
 	Methods     []Method
@@ -35,7 +35,7 @@ type Method struct {
 
 type InterfaceClass struct {
 	InterfaceName      string
-	Inherits           string
+	Inherits           []string
 	AbstractAttributes []Attribute
 	AbstractMethods    []Method
 }
@@ -92,8 +92,9 @@ func main() {
 	}
 
 	datenClassDiagram := JavaClass{
-		ClassName: "TestClass",
-		Inherits:  "Test",
+		ClassName:   "TestClass",
+		Abstraction: []string{"TestInterface", "TestImp2"},
+		Inherits:    "Test",
 		Attributes: []Attribute{
 			{"private", "name", "String", false, false, ""},
 			{"public", "age", "int", false, false, ""},
@@ -109,7 +110,7 @@ func main() {
 
 	datenInterfaceDiagram := InterfaceClass{
 		InterfaceName: "InterfaceTest",
-		Inherits:      "",
+		Inherits:      []string{"RoundTest", "ElephantTest"},
 		AbstractAttributes: []Attribute{
 			{"", "coll", "Database", false, false, "new Database"},
 			{"", "Jahrtausend", "int", false, false, 2100},

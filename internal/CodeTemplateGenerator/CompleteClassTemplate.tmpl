@@ -1,4 +1,4 @@
-public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}} {{else if .Abstraction}} implements {{.Inherits}}{{end}} {
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements{{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
     {{- range .Attributes }}
     {{.AccessModifier}}{{if .ClassVariable}} static{{end}}{{if .Constant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
     {{- end }}
