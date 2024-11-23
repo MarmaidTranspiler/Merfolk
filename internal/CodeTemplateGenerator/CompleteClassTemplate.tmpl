@@ -1,38 +1,34 @@
-public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}} {{else if .Abstraction}} implements {{.Inherits}}{{end}} {
-    {{- range .Attributes }}
-    {{.AccessModifier}}{{if .ClassVariable}} static{{end}}{{if .Constant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
-    {{- end }}
+public {{if .Abstraction}}{{.Abstraction}} {{end}}class {{.ClassName}}
+{{- if .Inherits}} extends {{.Inherits}}{{end}}
+{{- if .Implements}} implements {{join .Implements ", "}}{{end}} {
+    {{- range .Attributes}}
+    {{.AccessModifier}} {{.Type}} {{.Name}};
+    {{- end}}
 
-    // Standardkonstruktor
+    // Default constructor
     public {{.ClassName}}() {
-        {{- range .Attributes }}
-        {{- if and (not .ClassVariable) (not .Constant)}}
+        {{- range .Attributes}}
+        {{- if not .ClassVariable}}
         this.{{.Name}} = {{defaultZero .Type}};
         {{- end}}
-        {{- end }}
+        {{- end}}
     }
 
-    // Konstruktor mit allen Parametern
-    public {{.ClassName}}(
-    {{- range $index, $field := .Attributes }}
-        {{- if and (not $field.ClassVariable) (not $field.Constant) }}{{- if $index }}, {{ end }}{{$field.Type}} {{$field.Name}} {{- end }}{{- end }}) {
-        {{- range .Attributes }}
-        {{- if and (not .ClassVariable) (not .Constant) }}
+    // Parameterized constructor
+    public {{.ClassName}}({{range $index, $element := .Attributes}}
+        {{- if not $element.ClassVariable}}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{end}}
+    {{- end}}) {
+        {{- range .Attributes}}
+        {{- if not .ClassVariable}}
         this.{{.Name}} = {{.Name}};
         {{- end}}
-        {{- end }}
+        {{- end}}
     }
 
-    {{- range .Attributes }}
-    {{- if and (eq .AccessModifier "public") (not .ClassVariable) (not .Constant) }}
-    // Getter {{.Name}}
-    public {{.Type}} get{{title .Name}}() {
-        return {{.Name}};
+    {{- range .Methods}}
+    {{.AccessModifier}} {{.Type}} {{.Name}}({{range $index, $param := .Parameters}}
+        {{- if $index}}, {{end}}{{.Type}} {{.Name}}{{end}}) {
+        {{.Body}}
     }
-    // Setter {{.Name}}
-    public void set{{title .Name}}({{.Type}} {{.Name}}) {
-        this.{{.Name}} = {{.Name}};
-    }
-    {{end}}
-    {{- end }}
+    {{- end}}
 }
