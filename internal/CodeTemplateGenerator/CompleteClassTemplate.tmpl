@@ -24,7 +24,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
     }
 
     {{- range .Attributes }}
-    {{- if and (eq .AccessModifier "public") (not .ClassVariable) (not .Constant) }}
+    {{- if and (ne .AccessModifier "public") (not .ClassVariable) (not .Constant) }}
     // Getter {{.Name}}
     public {{.Type}} get{{title .Name}}() {
         return {{.Name}};
