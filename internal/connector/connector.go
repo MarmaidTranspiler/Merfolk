@@ -24,10 +24,11 @@ func mapVisibility(symbol string) string {
 }
 
 // convertParameters converts parser parameters to generator attributes.
-func convertParameters(params []*reader.Parameter) []generator.Attribute {
-	var result []generator.Attribute
+// convertParameters converts a slice of reader.Parameter to a slice of Attribute.
+func convertParameters(params []*reader.Parameter) []Attribute {
+	var result []Attribute
 	for _, p := range params {
-		result = append(result, generator.Attribute{
+		result = append(result, Attribute{
 			Name: p.Name,
 			Type: p.Type,
 		})
@@ -38,12 +39,12 @@ func convertParameters(params []*reader.Parameter) []generator.Attribute {
 // getOrCreateClass retrieves or creates a JavaClass instance.
 func getOrCreateClass(
 	name string,
-	classMap map[string]*generator.JavaClass,
-) *generator.JavaClass {
+	classMap map[string]*JavaClass,
+) *JavaClass {
 	if cls, exists := classMap[name]; exists {
 		return cls
 	}
-	cls := &generator.JavaClass{
+	cls := &JavaClass{
 		ClassName: name,
 	}
 	classMap[name] = cls
@@ -53,24 +54,24 @@ func getOrCreateClass(
 // getOrCreateInterface retrieves or creates an InterfaceClass instance.
 func getOrCreateInterface(
 	name string,
-	interfaceMap map[string]*generator.InterfaceClass,
-) *generator.InterfaceClass {
+	interfaceMap map[string]*InterfaceClass,
+) *InterfaceClass {
 	if iface, exists := interfaceMap[name]; exists {
 		return iface
 	}
-	iface := &generator.InterfaceClass{
+	iface := &InterfaceClass{
 		InterfaceName: name,
 	}
 	interfaceMap[name] = iface
 	return iface
 }
 
-// transformClassDiagram transforms a ClassDiagram into JavaClass and InterfaceClass instances.
-func transformClassDiagram(
+// TransformClassDiagram transforms a ClassDiagram into JavaClass and InterfaceClass instances.
+func TransformClassDiagram(
 	classDiagram *reader.ClassDiagram,
-) ([]generator.JavaClass, []generator.InterfaceClass) {
-	classMap := make(map[string]*generator.JavaClass)
-	interfaceMap := make(map[string]*generator.InterfaceClass)
+) ([]JavaClass, []InterfaceClass) {
+	classMap := make(map[string]*JavaClass)
+	interfaceMap := make(map[string]*InterfaceClass)
 
 	for _, instr := range classDiagram.Instructions {
 		// Handle ClassMember
@@ -82,7 +83,7 @@ func transformClassDiagram(
 				// Attribute
 				attr := instr.Member.Attribute
 				javaClass := getOrCreateClass(className, classMap)
-				javaAttr := generator.Attribute{
+				javaAttr := Attribute{
 					AccessModifier: visibility,
 					Name:           attr.Name,
 					Type:           attr.Type,
@@ -93,7 +94,7 @@ func transformClassDiagram(
 				op := instr.Member.Operation
 				if _, exists := interfaceMap[className]; exists {
 					javaInterface := getOrCreateInterface(className, interfaceMap)
-					javaMethod := generator.Method{
+					javaMethod := Method{
 						AccessModifier: visibility,
 						Name:           op.Name,
 						Type:           op.Return,
@@ -102,7 +103,7 @@ func transformClassDiagram(
 					javaInterface.Methods = append(javaInterface.Methods, javaMethod)
 				} else {
 					javaClass := getOrCreateClass(className, classMap)
-					javaMethod := generator.Method{
+					javaMethod := Method{
 						AccessModifier: visibility,
 						Name:           op.Name,
 						Type:           op.Return,
@@ -158,12 +159,12 @@ func transformClassDiagram(
 	}
 
 	// Collect classes and interfaces into slices
-	var javaClasses []generator.JavaClass
+	var javaClasses []JavaClass
 	for _, cls := range classMap {
 		javaClasses = append(javaClasses, *cls)
 	}
 
-	var javaInterfaces []generator.InterfaceClass
+	var javaInterfaces []InterfaceClass
 	for _, iface := range interfaceMap {
 		javaInterfaces = append(javaInterfaces, *iface)
 	}

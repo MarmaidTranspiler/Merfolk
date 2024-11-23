@@ -70,6 +70,7 @@ import (
 	"bytes"
 	_ "encoding/json"
 	"fmt"
+	"github.com/MarmaidTranspiler/Merfolk/internal/connector"
 	"io/fs"
 	"os"
 	"path"
@@ -120,7 +121,7 @@ func Convert(args []string) {
 
 	for _, diagram := range diagrams {
 		if diagram.IsClass {
-			javaClasses, javaInterfaces := transformClassDiagram(diagram.Class)
+			javaClasses, javaInterfaces := connector.TransformClassDiagram(diagram.Class)
 			// Generate Java code for classes
 			for _, javaClass := range javaClasses {
 				err := generateJavaClass(javaClass, outputDir)
@@ -182,7 +183,7 @@ var templateFuncs = template.FuncMap{
 }
 
 // generateJavaClass generates Java code for a class.
-func generateJavaClass(javaClass generator.JavaClass, outputDir string) error {
+func generateJavaClass(javaClass connector.JavaClass, outputDir string) error {
 	tmpl, err := template.New("class").Funcs(templateFuncs).
 		ParseFiles("CompleteClassTemplate.tmpl")
 	if err != nil {
@@ -201,7 +202,7 @@ func generateJavaClass(javaClass generator.JavaClass, outputDir string) error {
 
 // generateJavaInterface generates Java code for an interface.
 func generateJavaInterface(
-	javaInterface generator.InterfaceClass,
+	javaInterface connector.InterfaceClass,
 	outputDir string,
 ) error {
 	tmpl, err := template.New("interface").Funcs(templateFuncs).
