@@ -42,13 +42,18 @@ jobs:
     - name: Run tests
       run: go test ./... -v
 
-    # Build all packages into a directory
-    - name: Build
-      run: go build -o bin ./...
+    # Build all packages
+    - name: Build all packages
+      run: |
+        mkdir -p bin
+        for pkg in $(go list ./... | grep -v /vendor/); do
+          pkgname=$(basename $pkg)
+          go build -o bin/$pkgname $pkg
+        done
 
     # Upload the build artifacts
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: my-go-apps
+        name: go-apps
         path: bin
