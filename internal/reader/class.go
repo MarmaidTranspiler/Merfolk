@@ -66,7 +66,7 @@ var (
 		{"whitespace", `[ \t\r]+`},
 	})
 
-	ClassDiagramParser = participle.MustBuild[ClassDiagram](
+	ClassDiagramReader = participle.MustBuild[ClassDiagram](
 		participle.Lexer(ClassDiagramLexer),
 		participle.Unquote("Cardinality"),
 	)

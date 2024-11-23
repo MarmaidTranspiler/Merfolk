@@ -10,12 +10,11 @@ import (
 type Diagram struct {
 	IsSequence bool
 	Sequence   *SequenceDiagram
-
-	IsClass bool
-	Class   *ClassDiagram
+	IsClass    bool
+	Class      *ClassDiagram
 }
 
-func ParseFile(dir string) ([]Diagram, error) {
+func ReadFile(dir string) ([]Diagram, error) {
 	file, err := os.Open(dir)
 	if err != nil {
 		return nil, err
@@ -41,7 +40,7 @@ func ParseFile(dir string) ([]Diagram, error) {
 		} else if line == "```" {
 			if reading {
 				reading = false
-				diagram, err := ParseDiagram(builder.String())
+				diagram, err := ReadDiagram(builder.String())
 				if err != nil {
 					return nil, err
 				}
@@ -63,17 +62,17 @@ func ParseFile(dir string) ([]Diagram, error) {
 	return diagrams, nil
 }
 
-func ParseDiagram(input string) (*Diagram, error) {
+func ReadDiagram(input string) (*Diagram, error) {
 	var diagram Diagram
 
 	if strings.HasPrefix(input, "classDiagram") {
-		parsed, err := ClassDiagramParser.ParseString("", input)
+		parsed, err := ClassDiagramReader.ParseString("", input)
 		if err != nil {
 			return nil, err
 		}
 		diagram = Diagram{IsClass: true, Class: parsed}
 	} else if strings.HasPrefix(input, "sequenceDiagram") {
-		parsed, err := SequenceDiagramParser.ParseString("", input)
+		parsed, err := SequenceDiagramReader.ParseString("", input)
 		if err != nil {
 			return nil, err
 		}

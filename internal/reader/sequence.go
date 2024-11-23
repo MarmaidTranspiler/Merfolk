@@ -5,23 +5,6 @@ import (
 	"github.com/alecthomas/participle/v2/lexer"
 )
 
-// (create) participant (as)
-// (create) actor (as)
-// destroy
-// left relation right text
-//!NI box
-// -> --> ->> -->> <<->> <<-->> -x --x -) --)
-// activate / deactivate (!NOT + und -)
-// ignore note
-// ignore line break <br/>
-// ignore comment
-// loop ?
-// alt ?
-// par ?
-// critical ? option
-// break ?
-// self actions
-
 type SequenceDiagram struct {
 	Instructions []*SequenceInstruction `@@*`
 }
@@ -70,7 +53,7 @@ var (
 		{"whitespace", `\s+`},
 	})
 
-	SequenceDiagramParser = participle.MustBuild[SequenceDiagram](
+	SequenceDiagramReader = participle.MustBuild[SequenceDiagram](
 		participle.Lexer(SequenceDiagramLexer),
 	)
 )
