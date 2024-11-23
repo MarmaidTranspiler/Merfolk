@@ -21,7 +21,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: 1.23 # Set deine gewünschte Go-Version hier ein
+        go-version: 1.23
 
     # Cache dependencies
     - name: Cache Go modules
@@ -42,14 +42,13 @@ jobs:
     - name: Run tests
       run: go test ./... -v
 
-    # Build the project
+    # Build all packages into a directory
     - name: Build
-      run: go build -o bin/myapp ./...
+      run: go build -o bin ./...
 
-    # Upload the build artifact
-    - name: Upload build artifact
+    # Upload the build artifacts
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: my-go-app
-        path: bin/myapp
-
+        name: my-go-apps
+        path: bin
