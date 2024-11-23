@@ -14,23 +14,24 @@ type JavaClass struct {
 	Methods     []Method
 }
 
-// Attribute ClassVariable/ True, falls es sich um eine Klassenvariable handelt */
-// Attribute Constant/ True, falls es sich um eine Konstante handelt
+// Attribute IsClassVariable/ True, falls es sich um eine Klassenvariable handelt */
+// Attribute IsConstant/ True, falls es sich um eine Konstante handelt
 type Attribute struct {
-	AccessModifier string
-	Name           string
-	Type           string
-	ClassVariable  bool
-	Constant       bool
-	Value          any
+	AccessModifier  string
+	Name            string
+	Type            string
+	IsClassVariable bool
+	IsConstant      bool
+	Value           any
 }
 
 type Method struct {
 	AccessModifier string
 	Name           string
+	IsStatic       bool
 	Type           string
 	Parameters     []Attribute
-	Body           string
+	Body           []string
 }
 
 type InterfaceClass struct {
@@ -101,6 +102,10 @@ func main() {
 			{"public", "numbPopulation", "int", true, false, "8 Milliarden"},
 			{"public", "PI", "double", true, true, 3.124},
 			{"public", "MAXAGE", "int", false, true, ""},
+		},
+		Methods: []Method{
+			{Type: "void", Name: "NoneStaic", AccessModifier: "public", IsStatic: false, Parameters: []Attribute{{Type: "string", Name: "TestStringAttr"}, {Type: "int", Name: "IntAttr"}}},
+			{Type: "String", Name: "StaticMethods", IsStatic: true, AccessModifier: "public"},
 		},
 	}
 	err = class_temp.Execute(os.Stdout, datenClassDiagram)

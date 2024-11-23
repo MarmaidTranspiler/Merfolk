@@ -1,30 +1,30 @@
 public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements{{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
     {{- range .Attributes }}
-    {{.AccessModifier}}{{if .ClassVariable}} static{{end}}{{if .Constant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
+    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
     {{- end }}
 
-    // Standardkonstruktor
+    // default constructor
     public {{.ClassName}}() {
         {{- range .Attributes }}
-        {{- if and (not .ClassVariable) (not .Constant)}}
+        {{- if and (not .IsClassVariable) (not .IsConstant)}}
         this.{{.Name}} = {{defaultZero .Type}};
         {{- end}}
         {{- end }}
     }
 
-    // Konstruktor mit allen Parametern
+    // constructor with all arguments
     public {{.ClassName}}(
     {{- range $index, $field := .Attributes }}
-        {{- if and (not $field.ClassVariable) (not $field.Constant) }}{{- if $index }}, {{ end }}{{$field.Type}} {{$field.Name}} {{- end }}{{- end }}) {
+        {{- if and (not $field.IsClassVariable) (not $field.IsConstant) }}{{- if $index }}, {{ end }}{{$field.Type}} {{$field.Name}} {{- end }}{{- end }}) {
         {{- range .Attributes }}
-        {{- if and (not .ClassVariable) (not .Constant) }}
+        {{- if and (not .IsClassVariable) (not .IsConstant) }}
         this.{{.Name}} = {{.Name}};
         {{- end}}
         {{- end }}
     }
 
     {{- range .Attributes }}
-    {{- if and (ne .AccessModifier "public") (not .ClassVariable) (not .Constant) }}
+    {{- if and (ne .AccessModifier "public") (not .IsClassVariable) (not .IsConstant) }}
     // Getter {{.Name}}
     public {{.Type}} get{{title .Name}}() {
         return {{.Name}};
@@ -35,4 +35,11 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
     }
     {{end}}
     {{- end }}
+
+    {{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.Type}} {{.Name}}({{- range $index, $field := .Parameters}}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{end}}) {
+        // Methoden-Körper
+    {{if eq .Type "void"}}{{else}} return {{defaultZero .Type}};{{end}}
+    }
+    {{end }}
 }
