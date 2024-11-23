@@ -66,17 +66,14 @@ func ParseFile(dir string) ([]Diagram, error) {
 func ParseDiagram(input string) (*Diagram, error) {
 	var diagram Diagram
 
-	// Trim leading and trailing whitespace
-	trimmedInput := strings.TrimSpace(input)
-
-	if strings.HasPrefix(trimmedInput, "classDiagram") {
-		parsed, err := ClassDiagramParser.ParseString("", trimmedInput)
+	if strings.HasPrefix(input, "classDiagram") {
+		parsed, err := ClassDiagramParser.ParseString("", input)
 		if err != nil {
 			return nil, err
 		}
 		diagram = Diagram{IsClass: true, Class: parsed}
-	} else if strings.HasPrefix(trimmedInput, "sequenceDiagram") {
-		parsed, err := SequenceDiagramParser.ParseString("", trimmedInput)
+	} else if strings.HasPrefix(input, "sequenceDiagram") {
+		parsed, err := SequenceDiagramParser.ParseString("", input)
 		if err != nil {
 			return nil, err
 		}

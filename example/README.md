@@ -7,9 +7,10 @@ To demonstrate that Merfolk can read diagrams from multiple files an appropriate
 
 ```mermaid
 classDiagram
-    Animal <|-- Dog
-    Animal : -eat(Food food)
-    Dog : -bark(String message)
-    Dog "1" -- "*" Bone
-    Bone : -int size
+Animal <|-- Dog
+Animal : -eat(Food food)
+Dog : -bark(String message)
+Dog "1" -- "*" Bone
+Bone : -int size
+    
 ```

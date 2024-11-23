@@ -1,173 +1,105 @@
 package connector
 
 import (
-	_ "fmt"
-	_ "strings"
-
+	"errors"
+	"fmt"
+	generator "github.com/MarmaidTranspiler/Merfolk/internal/CodeTemplateGenerator"
 	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
+	"path/filepath"
 )
 
-// mapVisibility maps Mermaid visibility symbols to Java access modifiers.
-func mapVisibility(symbol string) string {
-	switch symbol {
-	case "+":
-		return "public"
-	case "-":
-		return "private"
-	case "#":
-		return "protected"
-	case "~":
-		return "/* package-private */"
-	default:
-		return "public"
-	}
-}
-
-// convertParameters converts parser parameters to generator attributes.
-// convertParameters converts a slice of reader.Parameter to a slice of Attribute.
-func convertParameters(params []*reader.Parameter) []Attribute {
-	var result []Attribute
-	for _, p := range params {
-		result = append(result, Attribute{
-			Name: p.Name,
-			Type: p.Type,
-		})
-	}
-	return result
-}
-
-// getOrCreateClass retrieves or creates a JavaClass instance.
-func getOrCreateClass(
-	name string,
-	classMap map[string]*JavaClass,
-) *JavaClass {
-	if cls, exists := classMap[name]; exists {
-		return cls
-	}
-	cls := &JavaClass{
-		ClassName: name,
-	}
-	classMap[name] = cls
-	return cls
-}
-
-// getOrCreateInterface retrieves or creates an InterfaceClass instance.
-func getOrCreateInterface(
-	name string,
-	interfaceMap map[string]*InterfaceClass,
-) *InterfaceClass {
-	if iface, exists := interfaceMap[name]; exists {
-		return iface
-	}
-	iface := &InterfaceClass{
-		InterfaceName: name,
-	}
-	interfaceMap[name] = iface
-	return iface
-}
-
-// TransformClassDiagram transforms a ClassDiagram into JavaClass and InterfaceClass instances.
+// TransformClassDiagram transforms a parsed ClassDiagram into JavaClass structs and generates code.
 func TransformClassDiagram(
 	classDiagram *reader.ClassDiagram,
-) ([]JavaClass, []InterfaceClass) {
-	classMap := make(map[string]*JavaClass)
-	interfaceMap := make(map[string]*InterfaceClass)
+	classTemplatePath, interfaceTemplatePath, outputDir string,
+) error {
+	if classDiagram == nil {
+		return errors.New("class diagram is nil")
+	}
 
-	for _, instr := range classDiagram.Instructions {
-		// Handle ClassMember
-		if instr.Member != nil {
-			className := instr.Member.Class
-			visibility := mapVisibility(instr.Member.Visibility)
+	// Maps for storing generated classes
+	classes := make(map[string]*generator.JavaClass)
 
-			if instr.Member.Attribute != nil {
-				// Attribute
-				attr := instr.Member.Attribute
-				javaClass := getOrCreateClass(className, classMap)
-				javaAttr := Attribute{
-					AccessModifier: visibility,
-					Name:           attr.Name,
-					Type:           attr.Type,
-				}
-				javaClass.Attributes = append(javaClass.Attributes, javaAttr)
-			} else if instr.Member.Operation != nil {
-				// Operation (Method)
-				op := instr.Member.Operation
-				if _, exists := interfaceMap[className]; exists {
-					javaInterface := getOrCreateInterface(className, interfaceMap)
-					javaMethod := Method{
-						AccessModifier: visibility,
-						Name:           op.Name,
-						Type:           op.Return,
-						Parameters:     convertParameters(op.Parameters),
-					}
-					javaInterface.Methods = append(javaInterface.Methods, javaMethod)
-				} else {
-					javaClass := getOrCreateClass(className, classMap)
-					javaMethod := Method{
-						AccessModifier: visibility,
-						Name:           op.Name,
-						Type:           op.Return,
-						Parameters:     convertParameters(op.Parameters),
-					}
-					javaClass.Methods = append(javaClass.Methods, javaMethod)
+	// Parse each instruction in the class diagram
+	for _, instruction := range classDiagram.Instructions {
+		if instruction.Member != nil {
+			className := instruction.Member.Class
+
+			// Create JavaClass if not exists
+			if _, exists := classes[className]; !exists {
+				classes[className] = &generator.JavaClass{
+					ClassName:  className,
+					Attributes: []generator.Attribute{},
+					Methods:    []generator.Method{},
 				}
 			}
-		}
 
-		// Handle Relationship
-		if instr.Relationship != nil {
-			rel := instr.Relationship
-			leftClassName := rel.LeftClass
-			rightClassName := rel.RightClass
-			relationshipType := rel.Type
-
-			switch relationshipType {
-			case "<|--":
-				// Inheritance
-				subClass := getOrCreateClass(leftClassName, classMap)
-				subClass.Inherits = rightClassName
-			case "..|>":
-				// Implementation
-				subClass := getOrCreateClass(leftClassName, classMap)
-				subClass.Implements = append(subClass.Implements, rightClassName)
-			case "<|..":
-				// Interface inheritance
-				subInterface := getOrCreateInterface(leftClassName, interfaceMap)
-				subInterface.Inherits = append(subInterface.Inherits, rightClassName)
-			}
-		}
-
-		// Handle Annotation
-		if instr.Annotation != nil {
-			annotation := instr.Annotation
-			className := annotation.Class
-			if annotation.Name == "interface" {
-				javaInterface := getOrCreateInterface(className, interfaceMap)
-				// Transfer methods and attributes if any
-				if javaClass, exists := classMap[className]; exists {
-					javaInterface.Methods = append(
-						javaInterface.Methods,
-						javaClass.Methods...,
-					)
-					delete(classMap, className)
+			// Process attributes and methods
+			member := instruction.Member
+			if member.Attribute != nil {
+				classes[className].Attributes = append(classes[className].Attributes, generator.Attribute{
+					AccessModifier: parseVisibility(member.Visibility),
+					Name:           member.Attribute.Name,
+					Type:           member.Attribute.Type,
+				})
+			} else if member.Operation != nil {
+				method := generator.Method{
+					AccessModifier: parseVisibility(member.Visibility),
+					Name:           member.Operation.Name,
+					Type:           member.Operation.Return,
+					Parameters:     []generator.Attribute{},
 				}
-			} else if annotation.Name == "abstract" {
-				javaClass := getOrCreateClass(className, classMap)
-				javaClass.Abstraction = "abstract"
+				for _, param := range member.Operation.Parameters {
+					method.Parameters = append(method.Parameters, generator.Attribute{
+						Name: param.Name,
+						Type: param.Type,
+					})
+				}
+				classes[className].Methods = append(classes[className].Methods, method)
 			}
 		}
 	}
 
-	// Collect classes and interfaces into slices
-	var javaClasses []JavaClass
-	for _, cls := range classMap {
-		javaClasses = append(javaClasses, *cls)
+	// Handle relationships (inheritance)
+	for _, instruction := range classDiagram.Instructions {
+		if instruction.Relationship != nil {
+			rel := instruction.Relationship
+			leftClass := rel.LeftClass
+			rightClass := rel.RightClass
+
+			if rel.Type == "--|" || rel.Type == "<|--" { // Inheritance
+				if child, exists := classes[leftClass]; exists {
+					child.Inherits = rightClass
+				}
+			}
+		}
 	}
 
-	var javaInterfaces []InterfaceClass
-	for _, iface := range interfaceMap {
-		javaInterfaces = append(javaInterfaces, *iface)
+	// Generate Java classes
+	for _, class := range classes {
+		outputPath := filepath.Join(outputDir, class.ClassName+".java")
+		err := generator.GenerateJavaClass(classTemplatePath, outputPath, *class)
+		if err != nil {
+			return fmt.Errorf("failed to generate class %s: %v", class.ClassName, err)
+		}
 	}
 
-	return javaClasses, javaInterfaces
+	// Note: Currently, no interface handling is implemented.
+	// If needed, add interface parsing logic and use generator.GenerateJavaInterface.
+
+	return nil
+}
+
+// parseVisibility maps Mermaid visibility symbols to Java access modifiers
+func parseVisibility(vis string) string {
+	switch vis {
+	case "+", "public":
+		return "public"
+	case "-", "private":
+		return "private"
+	case "#", "protected":
+		return "protected"
+	default:
+		return "private" // Default to private if unspecified
+	}
 }
