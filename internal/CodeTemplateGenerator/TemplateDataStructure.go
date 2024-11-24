@@ -1,6 +1,6 @@
-package main
+package CodeTemplateGenerator
 
-type JavaClass struct {
+type Class struct {
 	ClassName   string
 	Abstraction []string
 	Inherits    string
@@ -28,7 +28,7 @@ type Method struct {
 	Body           []string
 }
 
-type InterfaceClass struct {
+type Interface struct {
 	InterfaceName      string
 	Inherits           []string
 	AbstractAttributes []Attribute

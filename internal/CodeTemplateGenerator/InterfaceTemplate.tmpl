@@ -3,7 +3,7 @@ public interface {{.InterfaceName}} {{- if .Inherits}} extends {{ range $index, 
     public {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{- end}};
 {{- end }}
 
-{{- range .AbstractMethods }}
+{{ range .AbstractMethods }}
     public {{.Type}} {{.Name}}();
 {{- end }}
 }

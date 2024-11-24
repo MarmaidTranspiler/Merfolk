@@ -1,4 +1,4 @@
-package main
+package CodeTemplateGenerator
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"text/template"
 )
 
-// Utility functions for creating templates
-func templateGeneratorUtility() template.FuncMap {
+// TemplateGeneratorUtility Utility functions for creating templates
+func TemplateGeneratorUtility() template.FuncMap {
 	return template.FuncMap{
 		// Returns the default value for the given data type.
 		"defaultZero": func(typeName string) string {
@@ -46,9 +46,10 @@ func templateGeneratorUtility() template.FuncMap {
 	}
 }
 
-func generateJavaClass(classData JavaClass, outputPath string, outputFileName string) error {
+// GenerateJavaCode Generate out of the data a Interface or Java class
+func GenerateJavaCode[T Class | Interface](dataStruct T, outputPath string, outputFileName string, templateFile string) error {
 
-	classTemplate, err := template.New("CompleteClassTemplate.tmpl").Funcs(templateGeneratorUtility()).ParseFiles("CompleteClassTemplate.tmpl")
+	templateStruct, err := template.New(templateFile).Funcs(TemplateGeneratorUtility()).ParseFiles(templateFile)
 
 	if err != nil {
 		panic(err)
@@ -65,40 +66,10 @@ func generateJavaClass(classData JavaClass, outputPath string, outputFileName st
 		}
 	}(file)
 
-	err = classTemplate.Execute(file, classData)
+	err = templateStruct.Execute(file, dataStruct)
 	if err != nil {
-		return fmt.Errorf("failed to fill the Java class template: %w", err)
+		return fmt.Errorf("failed to fill the %s template: %w", templateFile, err)
 	}
 
 	return nil
-}
-
-func generateJavaInterface(interfaceData InterfaceClass, outputPath string, outputFileName string) error {
-
-	interfaceTemplate, err := template.New("InterfaceTemplate.tmpl").Funcs(templateGeneratorUtility()).ParseFiles("InterfaceTemplate.tmpl")
-	if err != nil {
-		return fmt.Errorf("failed to parse template: %w", err)
-	}
-
-	file, err := os.Create(outputPath + outputFileName)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-
-		}
-	}(file)
-
-	err = interfaceTemplate.Execute(file, interfaceData)
-	if err != nil {
-		return fmt.Errorf("failed to fill the Java class template: %w", err)
-	}
-
-	return nil
-}
-
-func test() {
-
 }
