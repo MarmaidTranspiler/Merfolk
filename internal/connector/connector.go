@@ -73,10 +73,11 @@ func TransformClassDiagram(
 				method := generator.Method{
 					AccessModifier: parseVisibility(member.Visibility),
 					Name:           member.Operation.Name,
-					Type:           member.Operation.Return,
 					IsStatic:       false,
+					ReturnType:     member.Operation.Return, // Updated field name
 					Parameters:     []generator.Attribute{},
-					Body:           []string{},
+					MethodBody:     []generator.Body{}, // Updated field name
+					ReturnValue:    "",                 // Optional: Initialize to default
 				}
 
 				// Add parameters to the method
@@ -98,22 +99,17 @@ func TransformClassDiagram(
 
 	// Generate Java classes
 	for _, class := range classes {
-
-		//err = classTemplate.Execute(file, class)
-		err := generator.GenerateJavaCode(*class, outputDir+"/", class.ClassName+".java", classTemplatePath)
-
+		err := generator.GenerateJavaCode(*class, outputDir+"/", class.ClassName, classTemplatePath)
 		if err != nil {
-			return fmt.Errorf("failed to generate class %s: %v", class.ClassName, err)
+			return fmt.Errorf("failed to generate class %s: %w", class.ClassName, err)
 		}
 	}
 
 	// Generate Java interfaces
 	for _, iface := range interfaces {
-
-		err := generator.GenerateJavaCode(*iface, outputDir+"/", iface.InterfaceName+".java", interfaceTemplatePath)
-
+		err := generator.GenerateJavaCode(*iface, outputDir+"/", iface.InterfaceName, interfaceTemplatePath)
 		if err != nil {
-			return fmt.Errorf("failed to generate interface %s: %v", iface.InterfaceName, err)
+			return fmt.Errorf("failed to generate interface %s: %w", iface.InterfaceName, err)
 		}
 	}
 
