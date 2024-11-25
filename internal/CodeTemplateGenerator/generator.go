@@ -1,4 +1,6 @@
-package generator
+package CodeTemplateGenerator
+
+/*package generator
 
 import (
 	"fmt"
@@ -120,3 +122,4 @@ func createFuncMap() template.FuncMap {
 		},
 	}
 }
+*/

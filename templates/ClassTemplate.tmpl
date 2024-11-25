@@ -1,0 +1,40 @@
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if .Abstraction}} implements {{range $index, $abs := .Abstraction}}{{if $index}}, {{end}}{{$abs}}{{end}}{{end}} {
+    {{- range .Attributes }}
+    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{end}};
+    {{- end }}
+
+    // Default constructor
+    public {{.ClassName}}() {
+        {{- range .Attributes }}
+        {{- if and (not .IsClassVariable) (not .IsConstant)}}
+        this.{{.Name}} = {{defaultZero .Type}};
+        {{- end }}
+        {{- end }}
+    }
+
+    // Constructor with arguments
+    public {{.ClassName}}(
+        {{- range $index, $attr := .Attributes }}
+        {{- if and (not $attr.IsClassVariable) (not $attr.IsConstant) }}
+        {{if $index}}, {{end}}{{$attr.Type}} {{$attr.Name}}
+        {{- end }}
+        {{- end }}
+    ) {
+        {{- range .Attributes }}
+        {{- if and (not .IsClassVariable) (not .IsConstant)}}
+        this.{{.Name}} = {{.Name}};
+        {{- end }}
+        {{- end }}
+    }
+
+    {{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.Type}} {{.Name}}(
+        {{- range $index, $param := .Parameters }}
+        {{if $index}}, {{end}}{{.Type}} {{.Name}}
+        {{- end }}
+    ) {
+        // TODO: Add method body
+    {{if eq .Type "void"}}{{else}} return {{defaultZero .Type}};{{end}}
+    }
+    {{- end }}
+}
