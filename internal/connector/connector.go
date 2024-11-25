@@ -119,7 +119,7 @@ func TransformClassDiagram(
 
 	// Generate Java classes
 	for _, class := range classes {
-		outputPath := filepath.Join(outputDir, class.ClassName+".java")
+		outputPath := filepath.Join(outputDir+"/class", class.ClassName+".java")
 		fmt.Printf("Generating class: %s, Output path: %s\n", class.ClassName, outputPath)
 
 		// Use the loaded template
@@ -137,7 +137,7 @@ func TransformClassDiagram(
 
 	// Generate Java interfaces
 	for _, iface := range interfaces {
-		outputPath := filepath.Join(outputDir, iface.InterfaceName+".java")
+		outputPath := filepath.Join(outputDir+"/interface", iface.InterfaceName+".java")
 		fmt.Printf("Generating interface: %s, Output path: %s\n", iface.InterfaceName, outputPath)
 
 		// Use the loaded template
