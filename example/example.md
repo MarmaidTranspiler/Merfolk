@@ -10,6 +10,14 @@ classDiagram
 ```
 
 ```mermaid
+sequenceDiagram
+    loop this is a definition
+        A ->> B : call()
+    end
+    %% seems to be working
+```
+
+```mermaid
 classDiagram
 Animal: +name String
 Animal: +age int

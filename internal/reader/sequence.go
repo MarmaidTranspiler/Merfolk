@@ -5,29 +5,13 @@ import (
 	"github.com/alecthomas/participle/v2/lexer"
 )
 
-// (create) participant (as)
-// (create) actor (as)
-// destroy
-// left relation right text
-//!NI box
-// -> --> ->> -->> <<->> <<-->> -x --x -) --)
-// activate / deactivate (!NOT + und -)
-// ignore note
-// ignore line break <br/>
-// ignore comment
-// loop ?
-// alt ?
-// par ?
-// critical ? option
-// break ?
-// self actions
-
 type SequenceDiagram struct {
-	Instructions []*SequenceInstruction `@@*`
+	Instructions []*SequenceInstruction `Break* @@* Break*`
 }
 
 type SequenceInstruction struct {
 	Message *Message        `  @@`
+	Loop    *Loop           `| @@`
 	Member  *SequenceMember `| @@`
 	Life    *Life           `| @@`
 	Switch  *Switch         `| @@`
@@ -37,32 +21,39 @@ type Message struct {
 	Left        string   `@Word`
 	Type        string   `@Arrow`
 	Right       string   `@Word ":"`
-	Name        string   `@Word`
-	DefaultCall bool     `@( "(" ")" )?`
-	Parameters  []string `( "(" @Word ( "," @Word )* ")" )?`
+	Name        string   `@Word Break*`
+	DefaultCall bool     `@( "(" ")" )? Break*`
+	Parameters  []string `( "(" @Word ( "," @Word )* ")" )? Break*`
+}
+
+type Loop struct {
+	IsEnd      bool     `  (?! "end" ~Break) @"end" Break+`
+	IsStart    bool     `| @"loop"`
+	Definition []string `( @Word+ Break+ )?`
 }
 
 type SequenceMember struct {
 	Type string `@( "participant" | "actor" )`
-	Name string `@Word ("as" Word)?`
+	Name string `@Word ("as" Word)? Break+`
 }
 
 type Life struct {
 	Type string `@( "create" | "destroy" )`
 	On   string `@("participant" | "actor")?`
-	Name string `@Word`
+	Name string `@Word Break+`
 }
 
 type Switch struct {
 	Type string `@( "activate" | "deactivate" )`
-	Name string `@Word`
+	Name string `@Word Break+`
 }
 
 var (
 	SequenceDiagramLexer = lexer.MustSimple([]lexer.SimpleRule{
 		{"diagramType", `sequenceDiagram`},
-		{"Keyword", `(?i)(participant|actor|as|create|destroy|(de)?activate)`},
+		{"Keyword", `(?i)(loop|end|participant|actor|as|create|destroy|(de)?activate)`},
 		{"Special", `[:,\(\)]`},
+		{"Break", `\n`},
 		{"Arrow", `((<<)?--?>>)|(--?[>x)])`},
 		{"Word", `[a-zA-Z]\w*`},
 		{"comment", `%%[^\n]*`},
