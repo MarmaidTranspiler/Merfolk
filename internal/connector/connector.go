@@ -3,20 +3,10 @@ package connector
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"text/template"
 
 	generator "github.com/MarmaidTranspiler/Merfolk/internal/CodeTemplateGenerator"
 	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
 )
-
-// loadTemplate uses the TemplateGeneratorUtility from CodeTemplateGenerator to load templates.
-func loadTemplate(templatePath string) (*template.Template, error) {
-	return template.New(filepath.Base(templatePath)).
-		Funcs(generator.TemplateGeneratorUtility()). // Use the shared utility
-		ParseFiles(templatePath)
-}
 
 // TransformClassDiagram processes a parsed ClassDiagram, converts it into Class and Interface structs,
 // and uses the generator package to produce Java code.
@@ -26,17 +16,6 @@ func TransformClassDiagram(
 ) error {
 	if classDiagram == nil {
 		return errors.New("class diagram is nil")
-	}
-
-	// Load templates with the utility functions
-	classTemplate, err := loadTemplate(classTemplatePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse class template: %v", err)
-	}
-
-	interfaceTemplate, err := loadTemplate(interfaceTemplatePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse interface template: %v", err)
 	}
 
 	// Maps for storing classes and interfaces
@@ -119,17 +98,10 @@ func TransformClassDiagram(
 
 	// Generate Java classes
 	for _, class := range classes {
-		outputPath := filepath.Join(outputDir+"/class", class.ClassName+".java")
-		fmt.Printf("Generating class: %s, Output path: %s\n", class.ClassName, outputPath)
 
-		// Use the loaded template
-		file, err := os.Create(outputPath)
-		if err != nil {
-			return fmt.Errorf("failed to create output file for class %s: %v", class.ClassName, err)
-		}
-		defer file.Close()
+		//err = classTemplate.Execute(file, class)
+		err := generator.GenerateJavaCode(*class, outputDir+"/", class.ClassName+".java", classTemplatePath)
 
-		err = classTemplate.Execute(file, class)
 		if err != nil {
 			return fmt.Errorf("failed to generate class %s: %v", class.ClassName, err)
 		}
@@ -137,17 +109,9 @@ func TransformClassDiagram(
 
 	// Generate Java interfaces
 	for _, iface := range interfaces {
-		outputPath := filepath.Join(outputDir+"/interface", iface.InterfaceName+".java")
-		fmt.Printf("Generating interface: %s, Output path: %s\n", iface.InterfaceName, outputPath)
 
-		// Use the loaded template
-		file, err := os.Create(outputPath)
-		if err != nil {
-			return fmt.Errorf("failed to create output file for interface %s: %v", iface.InterfaceName, err)
-		}
-		defer file.Close()
+		err := generator.GenerateJavaCode(*iface, outputDir+"/", iface.InterfaceName+".java", interfaceTemplatePath)
 
-		err = interfaceTemplate.Execute(file, iface)
 		if err != nil {
 			return fmt.Errorf("failed to generate interface %s: %v", iface.InterfaceName, err)
 		}
