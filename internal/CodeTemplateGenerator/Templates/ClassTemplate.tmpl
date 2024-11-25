@@ -36,10 +36,19 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
     {{end}}
     {{- end }}
 
-    {{- range .Methods }}
-    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.Type}} {{.Name}}({{- range $index, $field := .Parameters}}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{end}}) {
-        // Methoden-Körper
-    {{if eq .Type "void"}}{{else}} return {{defaultZero .Type}};{{end}}
+{{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
+        {{ $method := . }}
+        {{- range .MethodBody }}
+        {{- if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }} ({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else }}
+        {{- if $method.ReturnValue }}
+        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
+        {{- end }}
+
+        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }} {{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
     }
-    {{end }}
+{{- end }}
+
 }

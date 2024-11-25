@@ -19,13 +19,22 @@ type Attribute struct {
 	Value           any
 }
 
+type Body struct {
+	IsObjectCreation  bool
+	ObjectName        string
+	ObjectType        string
+	ObjFuncParameters []Attribute
+	FunctionName      string
+}
+
 type Method struct {
 	AccessModifier string
 	Name           string
 	IsStatic       bool
-	Type           string
+	ReturnType     string
 	Parameters     []Attribute
-	Body           []string
+	MethodBody     []Body
+	ReturnValue    string
 }
 
 type Interface struct {
