@@ -3,6 +3,7 @@ package CodeTemplateGenerator
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"text/template"
 )
 
@@ -46,10 +47,14 @@ func TemplateGeneratorUtility() template.FuncMap {
 	}
 }
 
-// GenerateJavaCode Generate out of the data a Interface or Java class
+// GenerateJavaCode Generate out of the data an Interface or Java class
 func GenerateJavaCode[T Class | Interface](dataStruct T, outputPath string, outputFileName string, templateFile string) error {
 
 	templateStruct, err := template.New(templateFile).Funcs(TemplateGeneratorUtility()).ParseFiles(templateFile)
+
+	if reflect.TypeOf(dataStruct).Name() == "Interface" {
+		outputFileName = "I" + outputFileName
+	}
 
 	if err != nil {
 		panic(err)
