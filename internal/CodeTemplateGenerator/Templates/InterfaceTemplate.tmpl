@@ -4,6 +4,6 @@ public interface {{.InterfaceName}} {{- if .Inherits}} extends {{ range $index, 
 {{- end }}
 
 {{ range .AbstractMethods }}
-    public {{.Type}} {{.Name}}();
+    public {{.ReturnType}} {{.Name}}();
 {{- end }}
 }
