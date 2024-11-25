@@ -1,6 +1,5 @@
-package generator
+package main
 
-/*
 import (
 	"fmt"
 	"os"
@@ -15,7 +14,7 @@ type JavaClass struct {
 	Methods     []Method
 }
 
-// Attribute ClassVariable/ True, falls es sich um eine Klassenvariable handelt
+// Attribute ClassVariable/ True, falls es sich um eine Klassenvariable handelt */
 // Attribute Constant/ True, falls es sich um eine Konstante handelt
 type Attribute struct {
 	AccessModifier string
@@ -42,12 +41,6 @@ type InterfaceClass struct {
 }
 
 func main() {
-	// Print the current working directory for debugging
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Current Working Directory:", cwd)
 
 	funcMap := template.FuncMap{
 		// Funktion für die Standardwerte abhängig vom Typ
@@ -86,13 +79,13 @@ func main() {
 		},
 	}
 
-	class_temp, err := template.New("CompleteClassTemplate.tmpl").Funcs(funcMap).ParseFiles("templates/CompleteClassTemplate.tmpl")
+	class_temp, err := template.New("CompleteClassTemplate.tmpl").Funcs(funcMap).ParseFiles("CompleteClassTemplate.tmpl")
 
 	if err != nil {
 		panic(err)
 	}
 
-	interface_temp, err := template.New("InterfaceTemplate.tmpl").Funcs(funcMap).ParseFiles("templates/InterfaceTemplate.tmpl")
+	interface_temp, err := template.New("InterfaceTemplate.tmpl").Funcs(funcMap).ParseFiles("InterfaceTemplate.tmpl")
 
 	if err != nil {
 		panic(err)
@@ -136,4 +129,3 @@ func main() {
 	}
 
 }
-*/
