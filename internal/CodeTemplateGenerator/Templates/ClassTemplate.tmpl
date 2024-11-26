@@ -41,7 +41,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{ $method := . }}
         {{- range .MethodBody }}
         {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }} ({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else }}
         {{- if $method.ReturnValue }}
         {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}

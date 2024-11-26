@@ -538,3 +538,123 @@ func TestClassExtendsAndImplements(t *testing.T) {
 		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
 	}
 }
+
+func TestMethodReturnsObject(t *testing.T) {
+	class := Class{
+		ClassName: "ObjectReturningClass",
+		Methods: []Method{
+			{
+				AccessModifier: "public",
+				Name:           "createObject",
+				ReturnType:     "CustomObject",
+				MethodBody: []Body{
+					{
+						IsObjectCreation: true,
+						ObjectName:       "obj",
+						ObjectType:       "CustomObject",
+						ObjFuncParameters: []Attribute{
+							{Name: "value", Type: "String", Value: "Test"},
+						},
+					},
+				},
+				ReturnValue: "obj",
+			},
+		},
+	}
+
+	expected := `
+	    public class ObjectReturningClass {
+	    public CustomObject createObject() {
+	        CustomObject obj = new CustomObject("Test");
+	        return obj;
+	    }
+	}`
+
+	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
+{{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
+        {{ $method := . }}
+        {{- range .MethodBody }}
+        {{- if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else }}
+        {{- if $method.ReturnValue }}
+        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
+        {{- end }}
+
+        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
+    }
+{{- end }}
+}`, class)
+
+	if err != nil {
+		t.Fatalf("Error rendering template: %v", err)
+	}
+
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
+	}
+}
+
+func TestMethodWithParametersReturnsObject(t *testing.T) {
+	class := Class{
+		ClassName: "ParameterizedObjectCreator",
+		Methods: []Method{
+			{
+				AccessModifier: "public",
+				Name:           "createCustomObject",
+				ReturnType:     "CustomObject",
+				Parameters: []Attribute{
+					{Name: "name", Type: "String"},
+					{Name: "age", Type: "int"},
+				},
+				MethodBody: []Body{
+					{
+						IsObjectCreation: true,
+						ObjectName:       "obj",
+						ObjectType:       "CustomObject",
+						ObjFuncParameters: []Attribute{
+							{Name: "name", Type: "String"},
+							{Name: "age", Type: "int"},
+						},
+					},
+				},
+				ReturnValue: "obj",
+			},
+		},
+	}
+
+	expected := `
+	public class ParameterizedObjectCreator {
+	    public CustomObject createCustomObject(String name, int age) {
+	        CustomObject obj = new CustomObject(name, age);
+	        return obj;
+	    }
+	}
+	`
+
+	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
+	{{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
+        {{ $method := . }}
+        {{- range .MethodBody }}
+        {{- if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else }}
+        {{- if $method.ReturnValue }}
+        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
+        {{- end }}
+
+        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
+    }
+{{- end }}
+}`, class)
+
+	if err != nil {
+		t.Fatalf("Error rendering template: %v", err)
+	}
+
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
+	}
+}
