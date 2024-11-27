@@ -63,7 +63,7 @@ func GenerateJavaCode[T Class | Interface](dataStruct T, outputPath string, outp
 
 	file, err := os.Create(outputPath + outputFileName + ".java")
 	if err != nil {
-		return fmt.Errorf("failed to create %s file: %w", file, err)
+		return fmt.Errorf("failed to create %v file: %w", file, err)
 	}
 	defer func(file *os.File) {
 		err := file.Close()
