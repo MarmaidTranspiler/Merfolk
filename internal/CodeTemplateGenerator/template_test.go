@@ -658,3 +658,95 @@ func TestMethodWithParametersReturnsObject(t *testing.T) {
 		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
 	}
 }
+
+func TestMethodInteraction(t *testing.T) {
+	class := Class{
+		ClassName: "MethodInteractionClass",
+		Methods: []Method{
+			{
+				AccessModifier: "public",
+				Name:           "getNiceString",
+				ReturnType:     "String",
+				ReturnValue:    "nice",
+			},
+			{
+				AccessModifier: "public",
+				Name:           "printString",
+				ReturnType:     "void",
+				Parameters: []Attribute{
+					{Name: "input", Type: "String"},
+				},
+				MethodBody: []Body{
+					{
+						FunctionName: "System.out.println",
+						ObjFuncParameters: []Attribute{
+							{Name: "input"},
+						},
+					},
+				},
+			},
+			{
+				AccessModifier: "public",
+				Name:           "executeMethods",
+				ReturnType:     "void",
+				MethodBody: []Body{
+					{
+						FunctionName: "getNiceString",
+					},
+					{
+						FunctionName: "printString",
+						ObjFuncParameters: []Attribute{
+							{
+								Type:  "String",
+								Value: "nice",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	expected := `
+	public class MethodInteractionClass {
+	    public String getNiceString() {
+	        return "nice";
+	    }
+
+	    public void printString(String input) {
+			System.out.println(input);
+	    }
+
+	    public void executeMethods() {
+			getNiceString();
+			printString("nice");
+	    }
+	}
+	`
+
+	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
+{{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
+        {{ $method := . }}
+        {{- range .MethodBody }}
+        {{- if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else }}
+        {{- if $method.ReturnValue }}
+        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }}); {{ end }}
+        {{- end }}
+
+        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{stringFormation $method.ReturnType $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
+    }
+{{- end }}
+
+}`, class)
+
+	if err != nil {
+		t.Fatalf("Error rendering template: %v", err)
+	}
+
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
+	}
+}
