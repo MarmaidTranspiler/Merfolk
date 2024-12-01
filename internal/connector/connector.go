@@ -165,13 +165,23 @@ func TransformSequenceDiagram(
 			classData.Attributes = append(classData.Attributes, generator.Attribute{
 				AccessModifier: "private",
 				Name:           member.Name,
-				Type:           member.Name, // Type is the participant's name
+				Type:           member.Name, // Participant type is the name of the participant
 			})
 
 		case instruction.Message != nil:
 			message := instruction.Message
 			fmt.Printf("Parsed Message: Left=%s, Right=%s, Name=%s\n",
 				message.Left, message.Right, message.Name)
+
+			// Determine the return type
+			var returnType string
+			if message.Right != "" {
+				returnType = message.Right // Use the receiver's type as the return type
+			} else if message.Left != "" {
+				returnType = message.Left // Use the sender's type if no receiver is present
+			} else {
+				returnType = "String" // Default return type
+			}
 
 			// Generate the variable name for this message
 			variableName := fmt.Sprintf("%sTo%sMessage", message.Left, message.Right)
@@ -181,7 +191,7 @@ func TransformSequenceDiagram(
 				{
 					IsObjectCreation:  true,
 					ObjectName:        variableName,
-					ObjectType:        "String",
+					ObjectType:        returnType,
 					ObjFuncParameters: []generator.Attribute{},
 				},
 			}
@@ -190,7 +200,7 @@ func TransformSequenceDiagram(
 			method := generator.Method{
 				AccessModifier: "public",
 				Name:           message.Name,
-				ReturnType:     "String",
+				ReturnType:     returnType, // Dynamically determined return type
 				Parameters: []generator.Attribute{
 					{Name: "sender", Type: message.Left},
 					{Name: "receiver", Type: message.Right},
