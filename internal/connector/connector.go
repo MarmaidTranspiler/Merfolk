@@ -5,6 +5,7 @@ import (
 	"fmt"
 	generator "github.com/MarmaidTranspiler/Merfolk/internal/CodeTemplateGenerator"
 	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
+	"strings"
 )
 
 // TransformClassDiagram processes a parsed ClassDiagram, converts it into Class and Interface structs,
@@ -146,7 +147,10 @@ func TransformSequenceDiagram(
 	// Variable to hold the class name
 	className := ""
 
-	// Map each instruction in the sequence diagram
+	// Map to track participants and their types
+	participants := map[string]string{}
+
+	// Process each instruction in the sequence diagram
 	for i, instruction := range sequenceDiagram.Instructions {
 		fmt.Printf("Instruction #%d: %+v\n", i, instruction)
 
@@ -155,18 +159,21 @@ func TransformSequenceDiagram(
 			member := instruction.Member
 			fmt.Printf("Parsed SequenceMember: Type=%s, Name=%s\n", member.Type, member.Name)
 
-			// Set the class name to the name of the first actor
+			// Set the class name to the first actor
 			if member.Type == "actor" && className == "" {
 				className = member.Name
 				fmt.Printf("Class name set to actor: %s\n", className)
 			}
 
-			// Add participants as attributes (type is the same as their name)
-			classData.Attributes = append(classData.Attributes, generator.Attribute{
-				AccessModifier: "private",
-				Name:           member.Name,
-				Type:           member.Name, // Participant type is the name of the participant
-			})
+			// Add participant to map and attributes
+			if _, exists := participants[member.Name]; !exists {
+				participants[member.Name] = member.Name // Type matches the name
+				classData.Attributes = append(classData.Attributes, generator.Attribute{
+					AccessModifier: "private",
+					Name:           strings.ToLower(member.Name), // Lowercase field name
+					Type:           member.Name,                  // Type matches the participant
+				})
+			}
 
 		case instruction.Message != nil:
 			message := instruction.Message
@@ -174,25 +181,37 @@ func TransformSequenceDiagram(
 				message.Left, message.Right, message.Name)
 
 			// Determine the return type
-			var returnType string
+			returnType := "String" // Default to String
 			if message.Right != "" {
-				returnType = message.Right // Use the receiver's type as the return type
-			} else if message.Left != "" {
-				returnType = message.Left // Use the sender's type if no receiver is present
-			} else {
-				returnType = "String" // Default return type
+				if participantType, exists := participants[message.Right]; exists {
+					returnType = participantType // Use the receiver's type
+				}
 			}
 
-			// Generate the variable name for this message
-			variableName := fmt.Sprintf("%sTo%sMessage", message.Left, message.Right)
+			// Construct method parameters
+			parameters := []generator.Attribute{
+				{Name: "sender", Type: participants[message.Left]},
+				{Name: "receiver", Type: participants[message.Right]},
+			}
 
-			// Construct the method body for variable creation
+			// Add additional parameters from the sequence message
+			for _, param := range message.Parameters {
+				parameters = append(parameters, generator.Attribute{
+					Name: param,
+					Type: "String", // Parameters are treated as strings by default
+				})
+			}
+
+			// Generate the variable name based on the method name
+			variableName := fmt.Sprintf("%sResult", strings.Title(message.Name))
+
+			// Construct the method body
 			methodBody := []generator.Body{
 				{
-					IsObjectCreation:  true,
-					ObjectName:        variableName,
-					ObjectType:        returnType,
-					ObjFuncParameters: []generator.Attribute{},
+					IsObjectCreation:  true,                    // Indicate object creation
+					ObjectName:        variableName,            // Variable name
+					ObjectType:        returnType,              // The type of the object created
+					ObjFuncParameters: []generator.Attribute{}, // Empty for now
 				},
 			}
 
@@ -200,50 +219,13 @@ func TransformSequenceDiagram(
 			method := generator.Method{
 				AccessModifier: "public",
 				Name:           message.Name,
-				ReturnType:     returnType, // Dynamically determined return type
-				Parameters: []generator.Attribute{
-					{Name: "sender", Type: message.Left},
-					{Name: "receiver", Type: message.Right},
-				},
-				MethodBody:  methodBody,
-				ReturnValue: variableName, // Return the created variable
-			}
-
-			// Add parameters from the message
-			for _, param := range message.Parameters {
-				method.Parameters = append(method.Parameters, generator.Attribute{
-					Name: param,
-					Type: "String",
-				})
+				ReturnType:     returnType,
+				Parameters:     parameters,
+				MethodBody:     methodBody,
+				ReturnValue:    variableName, // Return the created variable
 			}
 
 			classData.Methods = append(classData.Methods, method)
-
-		case instruction.Loop != nil:
-			loop := instruction.Loop
-			fmt.Printf("Loop Instruction Found: IsStart=%t, IsEnd=%t, Definition=%+v\n", loop.IsStart, loop.IsEnd, loop.Definition)
-
-			if loop.IsStart {
-				method := generator.Method{
-					AccessModifier: "public",
-					Name:           "startLoop",
-					ReturnType:     "void",
-					Parameters:     []generator.Attribute{},
-					MethodBody:     []generator.Body{},
-				}
-				classData.Methods = append(classData.Methods, method)
-			}
-
-			if loop.IsEnd {
-				method := generator.Method{
-					AccessModifier: "public",
-					Name:           "endLoop",
-					ReturnType:     "void",
-					Parameters:     []generator.Attribute{},
-					MethodBody:     []generator.Body{},
-				}
-				classData.Methods = append(classData.Methods, method)
-			}
 
 		default:
 			fmt.Printf("Unrecognized Instruction: %+v\n", instruction)
@@ -252,11 +234,6 @@ func TransformSequenceDiagram(
 
 	// Ensure class name is set
 	if className == "" {
-		fmt.Println("No actor found. Ensure the sequence diagram defines at least one actor.")
-		fmt.Println("Logging all instructions:")
-		for _, instruction := range sequenceDiagram.Instructions {
-			fmt.Printf("Instruction: %+v\n", instruction)
-		}
 		return fmt.Errorf("no actor defined in the sequence diagram to determine class name")
 	}
 	classData.ClassName = className

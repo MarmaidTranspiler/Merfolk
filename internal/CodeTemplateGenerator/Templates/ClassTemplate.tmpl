@@ -7,7 +7,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
     public {{.ClassName}}() {
         {{- range .Attributes }}
         {{- if and (not .IsClassVariable) (not .IsConstant)}}
-        this.{{.Name}} = {{defaultZero .Type}};
+        this.{{.Name}} = {{if eq .Type "String"}}{{defaultZero .Type}}{{else}}new {{.Type}}(){{end}};
         {{- end}}
         {{- end }}
     }
