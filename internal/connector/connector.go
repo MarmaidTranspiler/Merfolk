@@ -3,7 +3,6 @@ package connector
 import (
 	"errors"
 	"fmt"
-
 	generator "github.com/MarmaidTranspiler/Merfolk/internal/CodeTemplateGenerator"
 	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
 )
@@ -128,4 +127,63 @@ func parseVisibility(vis string) string {
 	default:
 		return "private" // Default to private if unspecified
 	}
+}
+
+// TransformSequenceDiagram processes a sequence diagram and generates Java code using the adapted class template.
+func TransformSequenceDiagram(
+	sequenceDiagram *reader.SequenceDiagram,
+	classTemplatePath, outputDir string,
+) error {
+	if sequenceDiagram == nil {
+		return fmt.Errorf("sequence diagram is nil")
+	}
+
+	// Convert the sequence diagram into a structure compatible with the class template
+	classData := generator.Class{
+		ClassName: "SequenceDiagram", // Name of the generated class
+		Methods:   []generator.Method{},
+	}
+
+	// Map each message in the sequence diagram to a method in the class
+	for _, instruction := range sequenceDiagram.Instructions {
+		if instruction.Message != nil {
+			message := instruction.Message
+
+			// Construct the return value based on message specifics (this can be adapted further)
+			var returnValue string
+			if message.DefaultCall {
+				returnValue = fmt.Sprintf("defaultCallFrom_%s_to_%s", message.Left, message.Right)
+			}
+
+			// Create a method for each message
+			method := generator.Method{
+				AccessModifier: "public",
+				Name:           message.Name,
+				ReturnType:     "String", // Assume all sequence methods return a String for now
+				Parameters: []generator.Attribute{
+					{
+						Name: "sender",
+						Type: "String",
+					},
+					{
+						Name: "receiver",
+						Type: "String",
+					},
+				},
+				MethodBody:  []generator.Body{}, // Add logic if necessary for custom method bodies
+				ReturnValue: returnValue,        // Set the return value for the template
+			}
+
+			classData.Methods = append(classData.Methods, method)
+		}
+	}
+
+	// Generate Java code using the class template
+	err := generator.GenerateJavaCode(classData, outputDir+"/", classData.ClassName, classTemplatePath)
+	if err != nil {
+		return fmt.Errorf("failed to generate Java code for sequence diagram: %w", err)
+	}
+
+	fmt.Println("Successfully generated Java code for sequence diagram.")
+	return nil
 }

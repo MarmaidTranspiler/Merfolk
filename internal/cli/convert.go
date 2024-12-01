@@ -2,12 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"github.com/MarmaidTranspiler/Merfolk/internal/connector"
+	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
 	"io/fs"
 	"os"
 	"path"
-
-	"github.com/MarmaidTranspiler/Merfolk/internal/connector"
-	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
 )
 
 func Convert(args []string) {
@@ -70,9 +69,9 @@ func Convert(args []string) {
 		classTemplatePath := "internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl"
 		interfaceTemplatePath := "internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl"
 
-		fmt.Println("Class Template Path:", classTemplatePath)
-		fmt.Println("Interface Template Path:", interfaceTemplatePath)
-		fmt.Println("Output Directory:", outputDir)
+		//fmt.Println("Class Template Path:", classTemplatePath)
+		//fmt.Println("Interface Template Path:", interfaceTemplatePath)
+		//fmt.Println("Output Directory:", outputDir)
 
 		// Process each diagram
 		for _, diagram := range diagrams {
@@ -89,11 +88,20 @@ func Convert(args []string) {
 				} else {
 					fmt.Println("Successfully processed class diagram from file:", file)
 				}
-			} else if diagram.IsSequence {
-				// Sequence diagrams are not yet supported
-				fmt.Println("Skipping sequence diagram in file:", file)
+			} else if diagram.IsSequence && diagram.Sequence != nil {
+				// Use the connector to process the sequence diagram
+				err := connector.TransformSequenceDiagram(
+					diagram.Sequence,
+					classTemplatePath,
+					outputDir,
+				)
+				if err != nil {
+					fmt.Println("Error processing sequence diagram in file", file, ":", err)
+				} else {
+					fmt.Println("Successfully processed sequence diagram from file:", file)
+				}
 			} else {
-				fmt.Println("Unknown diagram type in file:", file)
+				fmt.Println("Unknown or unsupported diagram type in file:", file)
 			}
 		}
 	}
