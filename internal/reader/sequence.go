@@ -23,7 +23,7 @@ type Message struct {
 	Right       string   `@Word ":"`
 	Name        string   `@Word Break*`
 	DefaultCall bool     `@( "(" ")" )? Break*`
-	Parameters  []string `( "(" @Word ( "," @Word )* ")" )? Break*`
+	Parameters  []string `( "(" (@Word | @String) ( "," (@Word | @String) )* ")" )? Break*`
 }
 
 type Loop struct {
@@ -59,6 +59,8 @@ var (
 		{"comment", `%%[^\n]*`},
 		{"note", `(?i)note[^\n]*`},
 		{"whitespace", `\s+`},
+		{"String", `"(?:[^"\\]|\\.)*"`}, // Handles double-quoted strings
+
 	})
 
 	SequenceDiagramParser = participle.MustBuild[SequenceDiagram](

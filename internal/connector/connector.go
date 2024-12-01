@@ -129,7 +129,6 @@ func parseVisibility(vis string) string {
 	}
 }
 
-// TransformSequenceDiagram processes a sequence diagram and generates Java code using the adapted class template.
 func TransformSequenceDiagram(
 	sequenceDiagram *reader.SequenceDiagram,
 	classTemplatePath, outputDir string,
@@ -138,45 +137,106 @@ func TransformSequenceDiagram(
 		return fmt.Errorf("sequence diagram is nil")
 	}
 
-	// Convert the sequence diagram into a structure compatible with the class template
+	// Initialize class data
 	classData := generator.Class{
-		ClassName: "SequenceDiagram", // Name of the generated class
-		Methods:   []generator.Method{},
+		Attributes: []generator.Attribute{},
+		Methods:    []generator.Method{},
 	}
 
-	// Map each message in the sequence diagram to a method in the class
-	for _, instruction := range sequenceDiagram.Instructions {
-		if instruction.Message != nil {
-			message := instruction.Message
+	// Variable to hold the class name
+	className := ""
 
-			// Construct the return value based on message specifics (this can be adapted further)
+	// Map each instruction in the sequence diagram
+	for i, instruction := range sequenceDiagram.Instructions {
+		fmt.Printf("Instruction #%d: %+v\n", i, instruction)
+
+		switch {
+		case instruction.Member != nil:
+			member := instruction.Member
+			fmt.Printf("Parsed SequenceMember: Type=%s, Name=%s\n", member.Type, member.Name)
+
+			// Set the class name to the name of the first actor
+			if member.Type == "actor" && className == "" {
+				className = member.Name
+				fmt.Printf("Class name set to actor: %s\n", className)
+			}
+
+			// Add participants as attributes
+			classData.Attributes = append(classData.Attributes, generator.Attribute{
+				AccessModifier: "private",
+				Name:           member.Name,
+				Type:           "String",
+			})
+
+		case instruction.Message != nil:
+			message := instruction.Message
+			fmt.Printf("Parsed Message: Left=%s, Right=%s, Name=%s\n",
+				message.Left, message.Right, message.Name)
+
+			// Construct the return value based on message specifics
 			var returnValue string
 			if message.DefaultCall {
 				returnValue = fmt.Sprintf("defaultCallFrom_%s_to_%s", message.Left, message.Right)
+			} else {
+				returnValue = fmt.Sprintf("message_%s_to_%s", message.Left, message.Right)
 			}
 
-			// Create a method for each message
+			// Create a method for the message
 			method := generator.Method{
 				AccessModifier: "public",
 				Name:           message.Name,
-				ReturnType:     "String", // Assume all sequence methods return a String for now
+				ReturnType:     "String",
 				Parameters: []generator.Attribute{
-					{
-						Name: "sender",
-						Type: "String",
-					},
-					{
-						Name: "receiver",
-						Type: "String",
-					},
+					{Name: "sender", Type: "String"},
+					{Name: "receiver", Type: "String"},
 				},
-				MethodBody:  []generator.Body{}, // Add logic if necessary for custom method bodies
-				ReturnValue: returnValue,        // Set the return value for the template
+				MethodBody:  []generator.Body{},
+				ReturnValue: returnValue,
 			}
 
 			classData.Methods = append(classData.Methods, method)
+
+		case instruction.Loop != nil:
+			loop := instruction.Loop
+			fmt.Printf("Loop Instruction Found: IsStart=%t, IsEnd=%t, Definition=%+v\n", loop.IsStart, loop.IsEnd, loop.Definition)
+
+			if loop.IsStart {
+				method := generator.Method{
+					AccessModifier: "public",
+					Name:           "startLoop",
+					ReturnType:     "void",
+					Parameters:     []generator.Attribute{},
+					MethodBody:     []generator.Body{},
+				}
+				classData.Methods = append(classData.Methods, method)
+			}
+
+			if loop.IsEnd {
+				method := generator.Method{
+					AccessModifier: "public",
+					Name:           "endLoop",
+					ReturnType:     "void",
+					Parameters:     []generator.Attribute{},
+					MethodBody:     []generator.Body{},
+				}
+				classData.Methods = append(classData.Methods, method)
+			}
+
+		default:
+			fmt.Printf("Unrecognized Instruction: %+v\n", instruction)
 		}
 	}
+
+	// Ensure class name is set
+	if className == "" {
+		fmt.Println("No actor found. Ensure the sequence diagram defines at least one actor.")
+		fmt.Println("Logging all instructions:")
+		for _, instruction := range sequenceDiagram.Instructions {
+			fmt.Printf("Instruction: %+v\n", instruction)
+		}
+		return fmt.Errorf("no actor defined in the sequence diagram to determine class name")
+	}
+	classData.ClassName = className
 
 	// Generate Java code using the class template
 	err := generator.GenerateJavaCode(classData, outputDir+"/", classData.ClassName, classTemplatePath)
@@ -184,6 +244,6 @@ func TransformSequenceDiagram(
 		return fmt.Errorf("failed to generate Java code for sequence diagram: %w", err)
 	}
 
-	fmt.Println("Successfully generated Java code for sequence diagram.")
+	fmt.Printf("Successfully generated Java code for sequence diagram with class name: %s\n", className)
 	return nil
 }
