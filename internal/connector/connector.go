@@ -161,11 +161,11 @@ func TransformSequenceDiagram(
 				fmt.Printf("Class name set to actor: %s\n", className)
 			}
 
-			// Add participants as attributes
+			// Add participants as attributes (type is the same as their name)
 			classData.Attributes = append(classData.Attributes, generator.Attribute{
 				AccessModifier: "private",
 				Name:           member.Name,
-				Type:           "String",
+				Type:           member.Name, // Type is the participant's name
 			})
 
 		case instruction.Message != nil:
@@ -173,12 +173,17 @@ func TransformSequenceDiagram(
 			fmt.Printf("Parsed Message: Left=%s, Right=%s, Name=%s\n",
 				message.Left, message.Right, message.Name)
 
-			// Construct the return value based on message specifics
-			var returnValue string
-			if message.DefaultCall {
-				returnValue = fmt.Sprintf("defaultCallFrom_%s_to_%s", message.Left, message.Right)
-			} else {
-				returnValue = fmt.Sprintf("message_%s_to_%s", message.Left, message.Right)
+			// Generate the variable name for this message
+			variableName := fmt.Sprintf("%sTo%sMessage", message.Left, message.Right)
+
+			// Construct the method body for variable creation
+			methodBody := []generator.Body{
+				{
+					IsObjectCreation:  true,
+					ObjectName:        variableName,
+					ObjectType:        "String",
+					ObjFuncParameters: []generator.Attribute{},
+				},
 			}
 
 			// Create a method for the message
@@ -187,11 +192,19 @@ func TransformSequenceDiagram(
 				Name:           message.Name,
 				ReturnType:     "String",
 				Parameters: []generator.Attribute{
-					{Name: "sender", Type: "String"},
-					{Name: "receiver", Type: "String"},
+					{Name: "sender", Type: message.Left},
+					{Name: "receiver", Type: message.Right},
 				},
-				MethodBody:  []generator.Body{},
-				ReturnValue: returnValue,
+				MethodBody:  methodBody,
+				ReturnValue: variableName, // Return the created variable
+			}
+
+			// Add parameters from the message
+			for _, param := range message.Parameters {
+				method.Parameters = append(method.Parameters, generator.Attribute{
+					Name: param,
+					Type: "String",
+				})
 			}
 
 			classData.Methods = append(classData.Methods, method)
