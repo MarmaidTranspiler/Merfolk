@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// TransformClassDiagram processes a parsed ClassDiagram and adds methods with object generation logic.
+// TransformClassDiagram processes a parsed ClassDiagram and ensures inter-class dependencies are handled as variables.
 func TransformClassDiagram(
 	classDiagram *reader.ClassDiagram,
 	classTemplatePath, interfaceTemplatePath, outputDir string,
@@ -70,24 +70,28 @@ func TransformClassDiagram(
 					IsStatic:       false,
 					ReturnType:     member.Operation.Return,
 					Parameters:     []generator.Attribute{},
-					MethodBody: []generator.Body{
-						{
-							IsObjectCreation: true,
-							ObjectName:       fmt.Sprintf("%sResult", member.Operation.Name),
-							ObjectType:       member.Operation.Return,
-							ObjFuncParameters: []generator.Attribute{
-								{Name: "args", Type: "Object"}, // Placeholder for arguments
-							},
-						},
-					},
-					ReturnValue: fmt.Sprintf("%sResult", member.Operation.Name),
+					MethodBody:     []generator.Body{},
+					ReturnValue:    fmt.Sprintf("%sResult", member.Operation.Name),
 				}
 
+				// Add class variables for parameters of type class
 				for _, param := range member.Operation.Parameters {
 					method.Parameters = append(method.Parameters, generator.Attribute{
 						Name: param.Name,
 						Type: param.Type,
 					})
+
+					// If the parameter type is a class, ensure it exists as an attribute
+					if _, exists := classes[param.Type]; exists {
+						classVar := generator.Attribute{
+							AccessModifier:  "private",
+							Name:            fmt.Sprintf("%sInstance", param.Type),
+							Type:            param.Type,
+							IsClassVariable: true,
+							IsConstant:      false,
+						}
+						classes[className].Attributes = append(classes[className].Attributes, classVar)
+					}
 				}
 
 				if isInterface {
@@ -110,7 +114,6 @@ func TransformClassDiagram(
 	return classes, interfaces, nil
 }
 
-// TransformSequenceDiagram integrates sequence diagrams into the classes generated from the class diagram.
 func TransformSequenceDiagram(
 	sequenceDiagram *reader.SequenceDiagram,
 	classes map[string]*generator.Class,
@@ -159,20 +162,31 @@ func TransformSequenceDiagram(
 				}
 			}
 
-			// Add the method to the sender's class
+			// Retrieve method return type from the class diagram
+			methodReturnType := "void" // Default if method is not found
+			if class, exists := classes[rightClass]; exists {
+				for _, method := range class.Methods {
+					if method.Name == message.Name {
+						methodReturnType = method.ReturnType
+						break
+					}
+				}
+			}
+
+			// Add the method to the sender's class with the correct return type
 			method := generator.Method{
 				AccessModifier: "public",
 				Name:           message.Name,
-				ReturnType:     rightClass,
+				ReturnType:     methodReturnType,
 				Parameters: []generator.Attribute{
 					{Name: "sender", Type: leftClass},
 					{Name: "receiver", Type: rightClass},
 				},
 				MethodBody: []generator.Body{
 					{
-						IsObjectCreation: true,
-						ObjectName:       fmt.Sprintf("%sResult", message.Name),
-						ObjectType:       rightClass,
+						IsObjectCreation:  false,
+						FunctionName:      fmt.Sprintf("%sInstance.%s", rightClass, message.Name),
+						ObjFuncParameters: []generator.Attribute{},
 					},
 				},
 				ReturnValue: fmt.Sprintf("%sResult", message.Name),
