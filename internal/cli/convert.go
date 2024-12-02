@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	generator "github.com/MarmaidTranspiler/Merfolk/internal/CodeTemplateGenerator"
 	"github.com/MarmaidTranspiler/Merfolk/internal/connector"
 	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
 	"io/fs"
@@ -54,7 +55,12 @@ func Convert(args []string) {
 		files = append(files, path.Join(inputDir, match))
 	}
 
-	// Parse Mermaid files and process diagrams
+	// Initialize maps for classes and interfaces
+	classes := make(map[string]*generator.Class)
+	interfaces := make(map[string]*generator.Interface)
+	var sequenceDiagrams []*reader.SequenceDiagram
+
+	// Parse Mermaid files
 	for _, file := range files {
 		fmt.Println("Processing file:", file)
 
@@ -65,44 +71,67 @@ func Convert(args []string) {
 			continue
 		}
 
-		// Define template paths
-		classTemplatePath := "internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl"
-		interfaceTemplatePath := "internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl"
-
-		//fmt.Println("Class Template Path:", classTemplatePath)
-		//fmt.Println("Interface Template Path:", interfaceTemplatePath)
-		//fmt.Println("Output Directory:", outputDir)
-
-		// Process each diagram
+		// Separate class and sequence diagrams
 		for _, diagram := range diagrams {
 			if diagram.IsClass && diagram.Class != nil {
-				// Use the connector to process the class diagram
-				err := connector.TransformClassDiagram(
+				// Process class diagrams
+				classMap, interfaceMap, err := connector.TransformClassDiagram(
 					diagram.Class,
-					classTemplatePath,
-					interfaceTemplatePath,
-					outputDir,
+					"internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl",     // No immediate output yet
+					"internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl", // No immediate output yet
+					outputDir+"/",
 				)
 				if err != nil {
 					fmt.Println("Error processing class diagram in file", file, ":", err)
-				} else {
-					fmt.Println("Successfully processed class diagram from file:", file)
+					continue
+				}
+
+				// Merge class and interface maps
+				for k, v := range classMap {
+					classes[k] = v
+				}
+				for k, v := range interfaceMap {
+					interfaces[k] = v
 				}
 			} else if diagram.IsSequence && diagram.Sequence != nil {
-				// Use the connector to process the sequence diagram
-				err := connector.TransformSequenceDiagram(
-					diagram.Sequence,
-					classTemplatePath,
-					outputDir,
-				)
-				if err != nil {
-					fmt.Println("Error processing sequence diagram in file", file, ":", err)
-				} else {
-					fmt.Println("Successfully processed sequence diagram from file:", file)
-				}
+				// Store sequence diagrams for later processing
+				sequenceDiagrams = append(sequenceDiagrams, diagram.Sequence)
 			} else {
 				fmt.Println("Unknown or unsupported diagram type in file:", file)
 			}
+		}
+	}
+
+	// Process sequence diagrams and integrate with classes
+	for _, sequenceDiagram := range sequenceDiagrams {
+		err := connector.TransformSequenceDiagram(
+			sequenceDiagram,
+			classes, // Modify existing class definitions
+			"internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl", // No immediate output yet
+			"",
+		)
+		if err != nil {
+			fmt.Println("Error processing sequence diagram:", err)
+		} else {
+			fmt.Println("Successfully processed sequence diagram.")
+		}
+	}
+
+	// Generate Java code for all classes and interfaces
+	classTemplatePath := "internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl"
+	interfaceTemplatePath := "internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl"
+
+	for _, class := range classes {
+		err := generator.GenerateJavaCode(*class, outputDir+"/", class.ClassName, classTemplatePath)
+		if err != nil {
+			fmt.Println("Error generating Java class:", class.ClassName, ":", err)
+		}
+	}
+
+	for _, iface := range interfaces {
+		err := generator.GenerateJavaCode(*iface, outputDir+"/", iface.InterfaceName, interfaceTemplatePath)
+		if err != nil {
+			fmt.Println("Error generating Java interface:", iface.InterfaceName, ":", err)
 		}
 	}
 }

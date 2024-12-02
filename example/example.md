@@ -2,70 +2,36 @@
 
 ```mermaid
 classDiagram
-    Person: +name String
-    Person: -age int
+Application : login(String user, String password)
 
-    Person: +getName() String
-    Person: +setName(String name)
+AuthService: authenticate(String user, String password) String
+AuthService: verify(String token) boolean
+
+DataService : fetch(String token) Data
+
+Data: +String content
 ```
-
 
 
 ```mermaid
-classDiagram
-Animal: +name String
-Animal: +age int
-Animal: +makeSound() void
-Dog: +breed String
-Dog: +bark() void
-Animal <|-- Dog
-
-
+sequenceDiagram
+  actor user
+  participant Application
+  participant AuthService
+  participant DataService
+  participant Data
+  user ->> Application : login()
+  Application ->> AuthService : authenticate()
+  AuthService -->> Application : sessionToken
+  Application ->> DataService : fetch(sessionToken)
+  DataService ->> AuthService : verify(sessionToken)
+  AuthService -->> DataService : valid
+  create participant Data
+  DataService ->> Data : Data()
+  Data -->> DataService : userData
+  DataService ->> Data : setContent()
+  DataService -->> Application : userData
+  Application -->> user : userData
+  
 ```
 
-```mermaid
-classDiagram
-<<interface>> Drawable
-Drawable: +draw() void
-Circle: +radius int
-Circle: +draw() void
-Rectangle: +width int
-Rectangle: +height int
-Rectangle: +draw() void
-Drawable <|.. Circle
-Drawable <|.. Rectangle
-
-
-```
-
-```mermaid
-classDiagram
-Car: +make String
-Car: +model String
-Car: +drive() void
-Engine: +type String
-Car "1" *-- "1" Engine: has
-
-```
-
-```mermaid
-classDiagram
-Customer: +name String
-Customer: +placeOrder() void
-Order: +orderId int
-Order: +process() void
-Customer "1" --> "*" Order: places
-
-```
-
-```mermaid
-classDiagram
-<<abstract>> Shape
-Shape: +color String
-Shape: +draw() void
-Circle: +radius int
-Circle: +draw() void
-Shape <|-- Circle
-
-
-```

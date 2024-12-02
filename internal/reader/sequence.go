@@ -60,6 +60,7 @@ var (
 		{"note", `(?i)note[^\n]*`},
 		{"whitespace", `\s+`},
 		{"String", `"(?:[^"\\]|\\.)*"`}, // Handles double-quoted strings
+		{"Null", `<null>`},              // Add support for <null>
 
 	})
 
