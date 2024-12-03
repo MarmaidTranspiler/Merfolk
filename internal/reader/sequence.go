@@ -12,6 +12,8 @@ type SequenceDiagram struct {
 type SequenceInstruction struct {
 	Message *Message        `  @@`
 	Loop    *Loop           `| @@`
+	Alt     *Alt            `| @@`
+	End     *End            `| @@`
 	Member  *SequenceMember `| @@`
 	Life    *Life           `| @@`
 	Switch  *Switch         `| @@`
@@ -27,9 +29,15 @@ type Message struct {
 }
 
 type Loop struct {
-	IsEnd      bool     `  (?! "end" ~Break) @"end" Break+`
-	IsStart    bool     `| @"loop"`
-	Definition []string `( @Word+ Break+ )?`
+	Definition []string `"loop" @Word+ Break+`
+}
+
+type Alt struct {
+	Definition []string `"alt" @Word+ Break+`
+}
+
+type End struct {
+	Clear string `@"end" Break+`
 }
 
 type SequenceMember struct {
@@ -51,7 +59,7 @@ type Switch struct {
 var (
 	SequenceDiagramLexer = lexer.MustSimple([]lexer.SimpleRule{
 		{"diagramType", `sequenceDiagram`},
-		{"Keyword", `(?i)(loop|end|participant|actor|as|create|destroy|(de)?activate)`},
+		{"Keyword", `(?i)(loop|alt|end|participant|actor|as|create|destroy|(de)?activate)`},
 		{"Special", `[:,\(\)]`},
 		{"Break", `\n`},
 		{"Arrow", `((<<)?--?>>)|(--?[>x)])`},
