@@ -1,13 +1,14 @@
-public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{ range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
     {{- range .Attributes }}
-    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
+    {{ $attribute := . }}
+    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .IsAttributeInitialized}} = {{- if .IsObject }} new {{.Type}}( {{- range $index, $arg := .ObjectConstructorArgs}} {{- if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}} {{- end}} ) {{- else}} {{stringFormation .Type .Value}}{{- end}}{{- end }};
     {{- end }}
 
     // default constructor
     public {{.ClassName}}() {
         {{- range .Attributes }}
-        {{- if and (not .IsClassVariable) (not .IsConstant)}}
-        this.{{.Name}} = {{defaultZero .Type}};
+        {{- if and (not .IsClassVariable) (not .IsConstant) (not .IsAttributeInitialized) }}
+        this.{{.Name}} = {{ if .IsObject }}new {{.Type}}({{range $index, $arg := .ObjectConstructorArgs}}{{if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}}{{end}}){{ else }}{{defaultZero .Type}}{{- end }};
         {{- end}}
         {{- end }}
     }
@@ -47,7 +48,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
         {{- end }}
 
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{stringFormation $method.ReturnType $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
+        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }}{{ if eq $method.IsVariable false }} {{stringFormation $method.ReturnType $method.ReturnValue }}{{ else }} {{ $method.ReturnValue }}{{ end }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
     }
 {{- end }}
 

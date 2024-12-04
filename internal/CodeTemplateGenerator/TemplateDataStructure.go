@@ -11,12 +11,15 @@ type Class struct {
 // Attribute IsClassVariable/ True, falls es sich um eine Klassenvariable handelt */
 // Attribute IsConstant/ True, falls es sich um eine Konstante handelt
 type Attribute struct {
-	AccessModifier  string
-	Name            string
-	Type            string
-	IsClassVariable bool
-	IsConstant      bool
-	Value           any
+	AccessModifier         string
+	Name                   string
+	Type                   string
+	IsClassVariable        bool
+	IsConstant             bool
+	IsAttributeInitialized bool
+	ObjectConstructorArgs  []ConstructorArg
+	IsObject               bool
+	Value                  any
 }
 
 type Body struct {
@@ -35,6 +38,7 @@ type Method struct {
 	Parameters     []Attribute
 	MethodBody     []Body
 	ReturnValue    string
+	IsVariable     bool
 }
 
 type Interface struct {
@@ -42,4 +46,9 @@ type Interface struct {
 	Inherits           []string
 	AbstractAttributes []Attribute
 	AbstractMethods    []Method
+}
+
+type ConstructorArg struct {
+	Type  string
+	Value string
 }
