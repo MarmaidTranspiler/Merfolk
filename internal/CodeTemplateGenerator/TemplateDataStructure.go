@@ -23,11 +23,22 @@ type Attribute struct {
 }
 
 type Body struct {
+	// Object creation
 	IsObjectCreation  bool
 	ObjectName        string
 	ObjectType        string
 	ObjFuncParameters []Attribute
-	FunctionName      string
+	// passing  method results into variable
+	IsVariable   bool
+	FunctionName string
+	// if Condition
+	IsCondition bool
+	Condition   string
+	IfBody      []Body
+	ElseBody    []Body
+	// Deklaration und/oder Initialisierung von Variablen
+	IsDeclaration bool
+	Variable      Attribute
 }
 
 type Method struct {
@@ -38,7 +49,6 @@ type Method struct {
 	Parameters     []Attribute
 	MethodBody     []Body
 	ReturnValue    string
-	IsVariable     bool
 }
 
 type Interface struct {

@@ -8,14 +8,131 @@ import (
 	"text/template"
 )
 
+var PATHCLASS = `
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{ range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
+    {{- range .Attributes }}
+    {{ $attribute := . }}
+    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .IsAttributeInitialized}} = {{- if .IsObject }} new {{.Type}}( {{- range $index, $arg := .ObjectConstructorArgs}} {{- if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}} {{- end}} ) {{- else}} {{stringFormation .Type .Value}}{{- end}}{{- end }};
+    {{- end }}
+
+    // default constructor
+    public {{.ClassName}}() {
+        {{- range .Attributes }}
+        {{- if and (not .IsClassVariable) (not .IsConstant) (not .IsAttributeInitialized) }}
+        this.{{.Name}} = {{ if .IsObject }}new {{.Type}}({{range $index, $arg := .ObjectConstructorArgs}}{{if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}}{{end}}){{ else }}{{defaultZero .Type}}{{- end }};
+        {{- end}}
+        {{- end }}
+    }
+
+    // constructor with all arguments
+    public {{.ClassName}}(
+    {{- range $index, $field := .Attributes }}
+        {{- if and (not $field.IsClassVariable) (not $field.IsConstant) }}{{- if $index }}, {{ end }}{{$field.Type}} {{$field.Name}} {{- end }}{{- end }}) {
+        {{- range .Attributes }}
+        {{- if and (not .IsClassVariable) (not .IsConstant) }}
+        this.{{.Name}} = {{.Name}};
+        {{- end}}
+        {{- end }}
+    }
+
+    {{- range .Attributes }}
+    {{- if and (ne .AccessModifier "public") (not .IsClassVariable) (not .IsConstant) }}
+    // Getter {{.Name}}
+    public {{.Type}} get{{title .Name}}() {
+        return {{.Name}};
+    }
+    // Setter {{.Name}}
+    public void set{{title .Name}}({{.Type}} {{.Name}}) {
+        this.{{.Name}} = {{.Name}};
+    }
+    {{end}}
+    {{- end }}
+
+{{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
+        {{- $method := . }}
+
+        {{- range .MethodBody }}
+        {{- if .IsDeclaration }}
+        {{- with .Variable }}
+        {{ .Type }} {{ .Name }}{{ if .IsAttributeInitialized }} = {{ .Value }}{{ end }};
+        {{- end }}
+        {{- else if .IsCondition }}
+        if ({{ .Condition }}) {
+            {{- range .IfBody }}
+            {{- template "BodyTemplate" . }}
+            {{- end }}
+        }
+        {{- if .ElseBody }}
+        else {
+            {{- range .ElseBody }}
+            {{- template "BodyTemplate" . }}
+            {{- end }}
+        }
+        {{- end }}
+        {{- else if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else if .IsVariable }}
+        {{ .Type }} {{ .Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else }}
+        {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- end }}
+        
+
+        {{- if ne $method.ReturnType "void" }}
+        return {{ if $method.ReturnValue }}{{ if eq .IsVariable false }}{{ stringFormation $method.ReturnType $method.ReturnValue }}{{ else }}{{ $method.ReturnValue }}{{ end }}{{ else }}{{ defaultZero $method.ReturnType }}{{ end }};
+        {{- end }}
+		{{- end }}
+    }
+{{- end }}
+
+}
+
+{{- define "BodyTemplate" }}
+{{- if .IsDeclaration }}
+{{- range .Variable }}
+{{ .Type }} {{ .Name }}{{ if .Value }} = {{ stringFormation .Type .Value }}{{ end }};
+{{- end }}
+{{- else if .IsObjectCreation }}
+{{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{ if $index }}, {{ end }}{{ if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+{{- else if .IsCondition }}
+if ({{ .Condition }}) {
+    {{- range .IfBody }}
+    {{- template "BodyTemplate" . }}
+    {{- end }}
+}
+{{- if .ElseBody }}
+else {
+    {{- range .ElseBody }}
+    {{- template "BodyTemplate" . }}
+    {{- end }}
+}
+{{- end }}
+{{- else }}
+{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{ if $index }}, {{ end }}{{ if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+{{- end }}
+{{- end }}`
+
+var PATHINTERFACE = `
+public interface {{.InterfaceName}} {{- if .Inherits}} extends {{ range $index, $interface := .Inherits}}{{if $index}}, {{end}}{{$interface}}{{- end}} {{- end}} {
+{{- range .AbstractAttributes }}
+    public {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{- end}};
+{{- end }}
+
+{{ range .AbstractMethods }}
+    public {{.ReturnType}} {{.Name}}();
+{{- end }}
+}`
+
 func renderTemplate(tmplStr string, data any) (string, error) {
 
-	tmpl, err := template.New("test").Funcs(TemplateGeneratorUtility()).Parse(tmplStr)
+	templateStruct, err := template.New("test").Funcs(TemplateGeneratorUtility()).Parse(tmplStr)
+	//templateStruct, err := template.New("test").Funcs(TemplateGeneratorUtility()).ParseFiles(tmplStr)
 	if err != nil {
 		return "", err
 	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := templateStruct.Execute(&buf, data); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -28,18 +145,41 @@ func normalizeCode(input string) string {
 }
 
 func TestClassAttributes(t *testing.T) {
+
 	class := Class{
 		ClassName: "TestClass",
 		Attributes: []Attribute{
 			{AccessModifier: "private", Name: "id", Type: "int", IsClassVariable: false, IsConstant: false},
 		},
 	}
-	expected := "private int id;"
-	output, err := renderTemplate("{{range .Attributes}}{{.AccessModifier}} {{.Type}} {{.Name}};{{end}}", class)
+	expected := `
+        public class TestClass {
+            
+            private int id;
+        
+            // default constructor
+            public TestClass() {
+                this.id = 0;
+            }
+        
+            // constructor with all arguments
+            public TestClass(int id) {
+                this.id = id;
+            }
+            // Getter id
+            public int getId() {
+                return id;
+            }
+            // Setter id
+            public void setId(int id) {
+                this.id = id;
+            }
+        }`
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
-	if output != expected {
+	if normalizeCode(output) != normalizeCode(expected) {
 		t.Errorf("Expected: %s, Got: %s", expected, output)
 	}
 }
@@ -48,16 +188,35 @@ func TestStaticClassAttributes(t *testing.T) {
 	class := Class{
 		ClassName: "TestClass",
 		Attributes: []Attribute{
-			{AccessModifier: "private", Name: "counter", Type: "int", IsClassVariable: true},
+			{
+				AccessModifier:  "private",
+				Name:            "counter",
+				Type:            "int",
+				IsClassVariable: true,
+			},
 		},
 	}
-	expected := "private static int counter;"
-	output, err := renderTemplate("{{range .Attributes}}{{if .IsClassVariable}}{{.AccessModifier}} static {{.Type}} {{.Name}};{{end}}{{end}}", class)
+
+	expected := `
+    public class TestClass { 
+		private static int counter; 
+
+	// default constructor 
+	public TestClass() {
+	} 
+
+	// constructor with all arguments 
+	public TestClass() { 
+	} 
+}`
+
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
-	if output != expected {
-		t.Errorf("Expected: %s, Got: %s", expected, output)
+
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Expected: %s, Got: %s", normalizeCode(expected), normalizeCode(output))
 	}
 }
 
@@ -65,16 +224,38 @@ func TestConstantAttributes(t *testing.T) {
 	class := Class{
 		ClassName: "TestClass",
 		Attributes: []Attribute{
-			{AccessModifier: "public", Name: "PI", Type: "double", IsConstant: true, Value: 3.14},
+			{
+				AccessModifier:         "public",
+				Name:                   "PI",
+				Type:                   "double",
+				IsConstant:             true,
+				IsAttributeInitialized: true,
+				Value:                  3.14,
+			},
 		},
 	}
-	expected := "public final double PI = 3.14;"
-	output, err := renderTemplate("{{range .Attributes}}{{if .IsConstant}}{{.AccessModifier}} final {{.Type}} {{.Name}} = {{.Value}};{{end}}{{end}}", class)
+
+	expected := `
+    public class TestClass { 
+		public final double PI = 3.14; 
+	
+		// default constructor 
+		public TestClass() {
+		
+		} 
+		// constructor with all arguments 
+		public TestClass() { 
+		
+		} 
+	}`
+
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
+
 	if normalizeCode(output) != normalizeCode(expected) {
-		t.Errorf("Expected:\n%s\nGot:\n%s", normalizeCode(expected), normalizeCode(output))
+		t.Errorf("Expected: %s, Got: %s", normalizeCode(expected), normalizeCode(output))
 	}
 }
 
@@ -82,23 +263,57 @@ func TestConstructorWithInstanceAttributes(t *testing.T) {
 	class := Class{
 		ClassName: "TestClass",
 		Attributes: []Attribute{
-			{AccessModifier: "private", Name: "id", Type: "int"},
-			{AccessModifier: "private", Name: "name", Type: "String"},
+			{
+				AccessModifier: "private",
+				Name:           "id",
+				Type:           "int",
+			},
+			{
+				AccessModifier: "private",
+				Name:           "name",
+				Type:           "String",
+			},
 		},
 	}
-	expected :=
-		`public TestClass(int id, String name) {
-        	this.id = id;
-        	this.name = name;
-        }`
-	output, err := renderTemplate(`
-public {{.ClassName}}({{range $index, $attr := .Attributes}}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{end}}) {
-	{{range .Attributes}}this.{{.Name}} = {{.Name}};
-	{{end}}
-}`, class)
+
+	expected := `
+	public class TestClass {
+        private int id;
+        private String name;
+	
+		// default constructor 
+		public TestClass() { 
+			this.id = 0; 
+			this.name = ""; 
+		} 
+		// constructor with all arguments 
+		public TestClass(int id, String name) {
+			this.id = id; 
+			this.name = name; 
+		} 
+		// Getter id 
+		public int getId() { 
+			return id; 
+		} 
+		// Setter id 
+		public void setId(int id) { 
+			this.id = id; 
+		} 
+		// Getter name 
+		public String getName() {
+			return name; 
+		} 
+		// Setter name 
+		public void setName(String name) {
+			this.name = name; 
+		} 
+	}`
+
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
+
 	if normalizeCode(output) != normalizeCode(expected) {
 		t.Errorf("Expected:\n%s\nGot:\n%s", normalizeCode(expected), normalizeCode(output))
 	}
@@ -112,13 +327,31 @@ func TestGettersAndSetters(t *testing.T) {
 		},
 	}
 	expected := `
-public int getId() { return this.id; }
-public void setId(int id) { this.id = id; }`
-	output, err := renderTemplate(`
-{{range .Attributes}}
-public {{.Type}} get{{title .Name}}() { return this.{{.Name}}; }
-public void set{{title .Name}}({{.Type}} {{.Name}}) { this.{{.Name}} = {{.Name}}; }
-{{end}}`, class)
+	public class TestClass {
+		private int id; 
+
+		// default constructor 
+		public TestClass() { 
+			this.id = 0; 
+		} 
+		
+		// constructor with all arguments 
+		public TestClass(int id) { 
+			this.id = id; 
+		} 
+		
+		// Getter id 
+		public int getId() { 
+			return id; 
+		} 
+
+		// Setter id 
+		public void setId(int id) { 
+			this.id = id; 
+		} 
+	}`
+
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
@@ -128,43 +361,46 @@ public void set{{title .Name}}({{.Type}} {{.Name}}) { this.{{.Name}} = {{.Name}}
 }
 
 func TestMethodWithFunctionCallAndAssignment(t *testing.T) {
-	method := Method{
-		AccessModifier: "public",
-		Name:           "calculate",
-		ReturnType:     "int",
-		Parameters: []Attribute{
-			{Name: "a", Type: "int"},
-			{Name: "b", Type: "int"},
-		},
-		MethodBody: []Body{
-			{
-				IsObjectCreation: false,
-				FunctionName:     "sum",
-				ObjFuncParameters: []Attribute{
-					{Name: "a"},
-					{Name: "b"},
+
+	method := Class{
+		ClassName: "TestClass",
+		Methods: []Method{{
+			AccessModifier: "public",
+			Name:           "calculate",
+			ReturnType:     "int",
+			Parameters: []Attribute{
+				{Name: "a", Type: "int"},
+				{Name: "b", Type: "int"},
+			},
+			MethodBody: []Body{
+				{
+
+					IsObjectCreation: false,
+					FunctionName:     "sum",
+					ObjFuncParameters: []Attribute{
+						{Name: "a"},
+						{Name: "b"},
+					},
 				},
 			},
-		},
-		ReturnValue: "result",
+			ReturnValue: "result",
+		}},
 	}
-	expected := `public int calculate(int a, int b) { 
-	int result = sum(a, b); 
-	return result;
-}`
-	output, err := renderTemplate(`
-        {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
-        {{ $method := . }}
-        {{- range .MethodBody }}
-        {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }} ({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
-        {{- if $method.ReturnValue }}
-        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
-        {{- end }}
+	expected := `
+	public class TestClass {
+		// default constructor 
+		public TestClass() { 
+		} 
+		// constructor with all arguments 
+		public TestClass() { 
+		} 
+		public int calculate(int a, int b) { 
+		sum(a, b); 
+		return result; 
+		} 
+	}`
 
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }}{{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
-    }`, method)
+	output, err := renderTemplate(PATHCLASS, method)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
@@ -194,12 +430,20 @@ func TestVoidMethodWithObjectCreation(t *testing.T) {
 	}
 
 	expected := `
-	public void createObject() {
-	    MyObject myObject = new MyObject();
-	}
-	`
+	public class TestClass { 
+		
+		// default constructor 
+		public TestClass() {
+		} 
+		// constructor with all arguments 
+		public TestClass() {
+		} 
+		public void createObject() {
+			MyObject myObject = new MyObject(); 
+		} 
+	}`
 
-	output, err := renderTemplate("{{range .Methods}}{{.AccessModifier}} {{.ReturnType}} {{.Name}}() {\n{{range .MethodBody}}{{if .IsObjectCreation}}{{.ObjectType}} {{.ObjectName}} = new {{.ObjectType}}();\n{{end}}{{end}}}\n{{end}}", class)
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
@@ -224,7 +468,7 @@ func TestVoidMethodWithObjectCreationAndParams(t *testing.T) {
 						ObjectType:       "MyObject",
 						ObjFuncParameters: []Attribute{
 							{Name: "param1", Type: "int", Value: 42},
-							{Name: "param2", Type: "String", Value: `"Hello"`},
+							{Name: "param2", Type: "String", Value: "Hello"},
 						},
 					},
 				},
@@ -238,7 +482,7 @@ func TestVoidMethodWithObjectCreationAndParams(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate("{{range .Methods}}{{.AccessModifier}} {{.ReturnType}} {{.Name}}() {\n{{range .MethodBody}}{{if .IsObjectCreation}}{{.ObjectType}} {{.ObjectName}} = new {{.ObjectType}}({{range $index, $param := .ObjFuncParameters}}{{if $index}}, {{end}}{{if $param.Value}}{{$param.Value}}{{else}}{{$param.Name}}{{end}}{{end}});\n{{end}}{{end}}}\n{{end}}", class)
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
@@ -274,7 +518,7 @@ func TestVoidMethodWithFunctionCall(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate("{{range .Methods}}{{.AccessModifier}} {{.ReturnType}} {{.Name}}() {\n{{range .MethodBody}}{{if .FunctionName}}{{.FunctionName}}({{range $index, $param := .ObjFuncParameters}}{{if $index}}, {{end}}{{if $param.Value}}{{$param.Value}}{{else}}{{$param.Name}}{{end}}{{end}});\n{{end}}{{end}}}\n{{end}}", class)
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
@@ -304,11 +548,7 @@ func TestSimpleInterface(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate(`public interface {{.InterfaceName}} {
-	{{range .AbstractMethods}}
-	    {{.ReturnType}} {{.Name}}({{range $index, $param := .Parameters}}{{if $index}}, {{end}}{{$param.Type}} {{$param.Name}}{{end}});
-	{{end}}
-	}`, Tinterface)
+	output, err := renderTemplate(PATHINTERFACE, Tinterface)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -338,15 +578,7 @@ func TestInterfaceWithMultipleInheritance(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate(`public interface {{.InterfaceName}} {{- if .Inherits}} extends {{ range $index, $interface := .Inherits}}{{if $index}}, {{end}}{{$interface}}{{- end}} {{- end}} {
-{{- range .AbstractAttributes }}
-    public {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{- end}};
-{{- end }}
-
-{{ range .AbstractMethods }}
-    public {{.ReturnType}} {{.Name}}();
-{{- end }}
-}`, Interface)
+	output, err := renderTemplate(PATHINTERFACE, Interface)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -373,11 +605,7 @@ func TestInterfaceWithAbstractAttributes(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate(`public interface {{.InterfaceName}} {
-	{{range .AbstractAttributes}}
-	    {{.AccessModifier}} static final {{.Type}} {{.Name}}{{if .Value}} = {{.Value}}{{end}};
-	{{end}}
-	}`, Interface)
+	output, err := renderTemplate(PATHINTERFACE, Interface)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -409,12 +637,7 @@ func TestClassExtendsSuperclass(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate(`public class {{.ClassName}} {{if .Inherits}}extends {{.Inherits}} {{end}}{
-	{{range .Methods}}
-	    {{.AccessModifier}} {{.ReturnType}} {{.Name}}({{range $index, $param := .Parameters}}{{if $index}}, {{end}}{{$param.Type}} {{$param.Name}}{{end}}) {
-	    }
-	{{end}}
-	}`, class)
+	output, err := renderTemplate(PATHCLASS, class)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -451,26 +674,7 @@ func TestClassImplementsInterface(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{ range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
-    {{- range .Attributes }}
-    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
-    {{- end }}
-	{{- range .Methods }}
-    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
-        {{ $method := . }}
-        {{- range .MethodBody }}
-        {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }} ({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
-        {{- if $method.ReturnValue }}
-        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
-        {{- end }}
-
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
-    }
-{{- end }}
-
-	}`, class)
+	output, err := renderTemplate(PATHCLASS, class)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -509,26 +713,7 @@ func TestClassExtendsAndImplements(t *testing.T) {
 	}
 	`
 
-	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{ range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
-    {{- range .Attributes }}
-    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .Value}} = {{stringFormation .Type .Value}}{{- end}};
-    {{- end }}
-	{{- range .Methods }}
-    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
-        {{ $method := . }}
-        {{- range .MethodBody }}
-        {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }} ({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
-        {{- if $method.ReturnValue }}
-        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
-        {{- end }}
-
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
-    }
-{{- end }}
-
-	}`, class)
+	output, err := renderTemplate(PATHCLASS, class)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -570,22 +755,7 @@ func TestMethodReturnsObject(t *testing.T) {
 	    }
 	}`
 
-	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
-{{- range .Methods }}
-    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
-        {{ $method := . }}
-        {{- range .MethodBody }}
-        {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
-        {{- if $method.ReturnValue }}
-        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
-        {{- end }}
-
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
-    }
-{{- end }}
-}`, class)
+	output, err := renderTemplate(PATHCLASS, class)
 
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
@@ -625,31 +795,15 @@ func TestMethodWithParametersReturnsObject(t *testing.T) {
 	}
 
 	expected := `
-	public class ParameterizedObjectCreator {
-	    public CustomObject createCustomObject(String name, int age) {
-	        CustomObject obj = new CustomObject(name, age);
-	        return obj;
-	    }
-	}
-	`
-
-	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
-	{{- range .Methods }}
-    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
-        {{ $method := . }}
-        {{- range .MethodBody }}
-        {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
-        {{- if $method.ReturnValue }}
-        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});{{- end }}
-        {{- end }}
-
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{ $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
+    public class ParameterizedObjectCreator {
+        public CustomObject createCustomObject(String name, int age) {
+            CustomObject obj = new CustomObject(name, age);
+            return obj;
+        }
     }
-{{- end }}
-}`, class)
+    `
 
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
@@ -659,15 +813,16 @@ func TestMethodWithParametersReturnsObject(t *testing.T) {
 	}
 }
 
-func TestMethodInteraction(t *testing.T) {
+func TestMethodInteractionExample(t *testing.T) {
 	class := Class{
-		ClassName: "MethodInteractionClass",
+		ClassName: "MethodInteractionExample",
 		Methods: []Method{
 			{
 				AccessModifier: "public",
 				Name:           "getNiceString",
 				ReturnType:     "String",
 				ReturnValue:    "nice",
+				MethodBody:     []Body{},
 			},
 			{
 				AccessModifier: "public",
@@ -680,26 +835,26 @@ func TestMethodInteraction(t *testing.T) {
 					{
 						FunctionName: "System.out.println",
 						ObjFuncParameters: []Attribute{
-							{Name: "input"},
+							{Name: "input", Type: "String"},
 						},
 					},
 				},
 			},
 			{
 				AccessModifier: "public",
-				Name:           "executeMethods",
+				Name:           "callMethods",
 				ReturnType:     "void",
 				MethodBody: []Body{
 					{
-						FunctionName: "getNiceString",
+						FunctionName:     "getNiceString",
+						ObjectName:       "result",
+						ObjectType:       "String",
+						IsObjectCreation: false,
 					},
 					{
 						FunctionName: "printString",
 						ObjFuncParameters: []Attribute{
-							{
-								Type:  "String",
-								Value: "nice",
-							},
+							{Name: "result", Type: "String"},
 						},
 					},
 				},
@@ -708,40 +863,169 @@ func TestMethodInteraction(t *testing.T) {
 	}
 
 	expected := `
-	public class MethodInteractionClass {
-	    public String getNiceString() {
-	        return "nice";
-	    }
+    public class MethodInteractionExample {
+        public String getNiceString() {
+            return "nice";
+        }
 
-	    public void printString(String input) {
-			System.out.println(input);
-	    }
+        public void printString(String input) {
+            System.out.println(input);
+        }
 
-	    public void executeMethods() {
-			getNiceString();
-			printString("nice");
-	    }
-	}
-	`
-
-	output, err := renderTemplate(`public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{- range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
-{{- range .Methods }}
-    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
-        {{ $method := . }}
-        {{- range .MethodBody }}
-        {{- if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
-        {{- if $method.ReturnValue }}
-        {{ $method.ReturnType }} {{ $method.ReturnValue }} = {{ end }}{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }}); {{ end }}
-        {{- end }}
-
-        {{ if ne $method.ReturnType "void" }}return {{- if $method.ReturnValue }} {{stringFormation $method.ReturnType $method.ReturnValue }}{{ else }} {{ defaultZero $method.ReturnType }}{{ end }};{{- end }}
+        public void callMethods() {
+            String result = getNiceString();
+            printString(result);
+        }
     }
-{{- end }}
+    `
 
-}`, class)
+	output, err := renderTemplate(PATHCLASS, class)
+	if err != nil {
+		t.Fatalf("Error rendering template: %v", err)
+	}
 
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
+	}
+}
+
+func TestComplexMethodWithConditions(t *testing.T) {
+	class := Class{
+		ClassName: "ComplexLogicExample",
+		Methods: []Method{
+			{
+				AccessModifier: "public",
+				Name:           "processValue",
+				ReturnType:     "String",
+				Parameters: []Attribute{
+					{Name: "value", Type: "int"},
+				},
+				MethodBody: []Body{
+					{
+						IsDeclaration: true,
+						ObjFuncParameters: []Attribute{
+							{Name: "result", Type: "String", Value: "\"Default\"", IsAttributeInitialized: true},
+						},
+					},
+					{
+						IsCondition: true,
+						Condition:   "value > 0",
+						IfBody: []Body{
+							{
+								FunctionName: "System.out.println",
+								ObjFuncParameters: []Attribute{
+									{Value: "\"Positive value\"", Type: "String"},
+								},
+							},
+							{
+								FunctionName: "result.concat",
+								ObjFuncParameters: []Attribute{
+									{Value: " Processed\"", Type: "String"},
+								},
+							},
+						},
+						ElseBody: []Body{
+							{
+								FunctionName: "System.out.println",
+								ObjFuncParameters: []Attribute{
+									{Value: "\"Non-positive value\"", Type: "String"},
+								},
+							},
+						},
+					},
+					{
+						FunctionName: "return",
+						ObjFuncParameters: []Attribute{
+							{Value: "result", Type: "String"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	expected := `
+    public class ComplexLogicExample {
+        public String processValue(int value) {
+            String result = "Default";
+            if (value > 0) {
+                System.out.println("Positive value");
+                result.concat(" Processed");
+            } else {
+                System.out.println("Non-positive value");
+            }
+            return result;
+        }
+    }
+    `
+
+	output, err := renderTemplate(PATHCLASS, class)
+	if err != nil {
+		t.Fatalf("Error rendering template: %v", err)
+	}
+
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
+	}
+}
+
+func TestStaticMethodWithMultipleParameters(t *testing.T) {
+	class := Class{
+		ClassName: "MathUtils",
+		Methods: []Method{
+			{
+				AccessModifier: "public",
+				Name:           "calculateSum",
+				IsStatic:       true,
+				ReturnType:     "int",
+				Parameters: []Attribute{
+					{Name: "a", Type: "int"},
+					{Name: "b", Type: "int"},
+					{Name: "c", Type: "int"},
+				},
+				MethodBody: []Body{
+					{
+						IsDeclaration: true,
+						ObjFuncParameters: []Attribute{
+							{Name: "sum", Type: "int", Value: "a + b + c", IsAttributeInitialized: true},
+						},
+					},
+					{
+						IsCondition: true,
+						Condition:   "sum > 0",
+						IfBody: []Body{
+							{
+								FunctionName: "System.out.println",
+								ObjFuncParameters: []Attribute{
+									{Value: "\"Positive sum\"", Type: "String"},
+								},
+							},
+						},
+					},
+					{
+						FunctionName: "return",
+						ObjFuncParameters: []Attribute{
+							{Value: "sum", Type: "int"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	expected := `
+    public class MathUtils {
+        public static int calculateSum(int a, int b, int c) {
+            int sum = a + b + c;
+            if (sum > 0) {
+                System.out.println("Positive sum");
+            }
+            return sum;
+        }
+    }
+    `
+
+	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
 		t.Fatalf("Error rendering template: %v", err)
 	}
