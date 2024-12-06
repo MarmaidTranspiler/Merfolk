@@ -116,11 +116,11 @@ else {
 var PATHINTERFACE = `
 public interface {{.InterfaceName}} {{- if .Inherits}} extends {{ range $index, $interface := .Inherits}}{{if $index}}, {{end}}{{$interface}}{{- end}} {{- end}} {
 {{- range .AbstractAttributes }}
-    public {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{- end}};
+    public {{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .IsAttributeInitialized}} = {{- if .IsObject }} new {{.Type}}( {{- range $index, $arg := .ObjectConstructorArgs}} {{- if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}} {{- end}} ) {{- else}} {{stringFormation .Type .Value}}{{- end}}{{- end }};
 {{- end }}
 
 {{ range .AbstractMethods }}
-    public {{.ReturnType}} {{.Name}}();
+    public {{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }});
 {{- end }}
 }`
 
@@ -477,8 +477,17 @@ func TestVoidMethodWithObjectCreationAndParams(t *testing.T) {
 	}
 
 	expected := `
-	public void createObjectWithParams() {
-	    MyObject myObject = new MyObject(42, "Hello");
+	public class TestClass { 
+		
+		// default constructor 
+		public TestClass() {
+		} 
+		// constructor with all arguments 
+		public TestClass() {
+		} 
+		public void createObjectWithParams() {
+	    	MyObject myObject = new MyObject(42, "Hello");
+		}
 	}
 	`
 
@@ -513,10 +522,18 @@ func TestVoidMethodWithFunctionCall(t *testing.T) {
 	}
 
 	expected := `
-	public void callFunction() {
-	    someFunction(42);
-	}
-	`
+	public class TestClass { 
+		
+		// default constructor 
+		public TestClass() {
+		} 
+		// constructor with all arguments 
+		public TestClass() {
+		} 
+		public void callFunction() {
+	    	someFunction(42);
+		}
+	}`
 
 	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
@@ -544,7 +561,7 @@ func TestSimpleInterface(t *testing.T) {
 
 	expected := `
 	public interface SimpleInterface {
-	    void doSomething(int param1);
+	    public void doSomething(int param1);
 	}
 	`
 
@@ -593,8 +610,8 @@ func TestInterfaceWithAbstractAttributes(t *testing.T) {
 	Interface := Interface{
 		InterfaceName: "AttributeInterface",
 		AbstractAttributes: []Attribute{
-			{AccessModifier: "public", Name: "CONST_VALUE", Type: "int", IsConstant: true, Value: 100},
-			{AccessModifier: "public", Name: "ID", Type: "String", IsConstant: true, Value: nil},
+			{AccessModifier: "public", Name: "CONST_VALUE", Type: "int", IsConstant: true, IsClassVariable: true, Value: 100, IsAttributeInitialized: true},
+			{AccessModifier: "public", Name: "ID", Type: "String", IsConstant: true, IsClassVariable: true},
 		},
 	}
 
@@ -632,10 +649,15 @@ func TestClassExtendsSuperclass(t *testing.T) {
 
 	expected := `
 	public class ChildClass extends BaseClass {
-	    public void doSomething() {
-	    }
-	}
-	`
+		// default constructor 
+		public ChildClass() {
+		} 
+		// constructor with all arguments 
+		public ChildClass() {
+		} 
+		public void doSomething() {
+		} 
+	}`
 
 	output, err := renderTemplate(PATHCLASS, class)
 
@@ -668,7 +690,14 @@ func TestClassImplementsInterface(t *testing.T) {
 
 	expected := `
 	public class ImplementingClass implements SomeInterface {
-	    public String performAction(String input) {
+		
+		// default constructor 
+		public ImplementingClass() {
+		} 
+		// constructor with all arguments 
+		public ImplementingClass() {
+		}
+		public String performAction(String input) {
 		return "";
 		}
 	}
@@ -738,7 +767,7 @@ func TestMethodReturnsObject(t *testing.T) {
 						ObjectName:       "obj",
 						ObjectType:       "CustomObject",
 						ObjFuncParameters: []Attribute{
-							{Name: "value", Type: "String", Value: "Test"},
+							{Type: "String", Value: "Test"},
 						},
 					},
 				},
@@ -795,13 +824,20 @@ func TestMethodWithParametersReturnsObject(t *testing.T) {
 	}
 
 	expected := `
-    public class ParameterizedObjectCreator {
-        public CustomObject createCustomObject(String name, int age) {
-            CustomObject obj = new CustomObject(name, age);
-            return obj;
-        }
-    }
-    `
+	public class ParameterizedObjectCreator {
+	
+		// default constructor 
+		public ParameterizedObjectCreator() {
+		} 
+		
+		// constructor with all arguments 
+		public ParameterizedObjectCreator() {
+		} 
+		public CustomObject createCustomObject(String name, int age) { 
+			CustomObject obj = new CustomObject(name, age); 
+			return obj; 
+		} 
+	}`
 
 	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
@@ -864,7 +900,14 @@ func TestMethodInteractionExample(t *testing.T) {
 
 	expected := `
     public class MethodInteractionExample {
-        public String getNiceString() {
+        // default constructor 
+		public MethodInteractionExample() {
+		} 
+		// constructor with all arguments 
+		public MethodInteractionExample() {
+		} 
+
+		public String getNiceString() {
             return "nice";
         }
 
@@ -946,6 +989,13 @@ func TestComplexMethodWithConditions(t *testing.T) {
 
 	expected := `
     public class ComplexLogicExample {
+		
+		// default constructor 
+		public ComplexLogicExample() { 
+		} 
+		// constructor with all arguments 
+		public ComplexLogicExample() {
+		}
         public String processValue(int value) {
             String result = "Default";
             if (value > 0) {
@@ -1015,6 +1065,13 @@ func TestStaticMethodWithMultipleParameters(t *testing.T) {
 
 	expected := `
     public class MathUtils {
+		
+		// default constructor 
+		public MathUtils() {
+		} 
+		// constructor with all arguments 
+		public MathUtils() {
+		}
         public static int calculateSum(int a, int b, int c) {
             int sum = a + b + c;
             if (sum > 0) {
