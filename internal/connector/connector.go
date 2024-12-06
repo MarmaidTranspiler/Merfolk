@@ -6,6 +6,7 @@ import (
 	generator "github.com/MarmaidTranspiler/Merfolk/internal/CodeTemplateGenerator"
 	"github.com/MarmaidTranspiler/Merfolk/internal/reader"
 	"path/filepath"
+	"strings"
 )
 
 func TransformClassDiagram(
@@ -139,9 +140,110 @@ func TransformSequenceDiagram(
 
 	fmt.Println("TransformSequenceDiagram: starting transformation of sequence diagram")
 
+	var currentFunction *generator.Method
+	var currentFunctionClass *generator.Class
+	//var lastCalledMethodClass *generator.Class
+	var lastCalledMethodName string
+
 	for _, instruction := range sequenceDiagram.Instructions {
 		if instruction.Message != nil {
-			processMessageInstruction(instruction.Message, classes)
+			message := instruction.Message
+
+			switch message.Type {
+			case "->>":
+				// Method call
+				// Check if we already have a current function defined
+				if currentFunction == nil {
+					// This is the first call in the sequence
+					// The right side should be a class with the method defined
+					targetClass := findClass(classes, message.Right)
+					if targetClass == nil {
+						fmt.Printf("Couldn't find class: %s\n", message.Right)
+						continue
+					}
+
+					targetMethod := findMethod(targetClass, message.Name)
+					if targetMethod == nil {
+						fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
+						continue
+					}
+
+					// Set the current function context
+					currentFunction = targetMethod
+					currentFunctionClass = targetClass
+					fmt.Printf("Current function set to %s.%s\n", currentFunctionClass.ClassName, currentFunction.Name)
+
+					// The left side could be an actor or a class, but we don't need it for now
+					// This just sets the context that we are now "inside" this function
+				} else {
+					// We are inside a function, calling another method
+					calledClass := findClass(classes, message.Right)
+					if calledClass == nil {
+						// The caller could be an actor or a non-existing class. If it's critical, print error:
+						fmt.Printf("Couldn't find class: %s\n", message.Right)
+						continue
+					}
+
+					calledMethod := findMethod(calledClass, message.Name)
+					if calledMethod == nil {
+						fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
+						continue
+					}
+
+					// If calledMethod has a return type, create a temporary variable for it
+					if calledMethod.ReturnType != "" {
+						body := generator.Body{
+							IsVariable:   true,
+							FunctionName: message.Name,
+							Variable: generator.Attribute{
+								Name: fmt.Sprintf("temp%s", capitalize(message.Name)), // Temporary variable name
+								Type: calledMethod.ReturnType,
+							},
+						}
+						currentFunction.MethodBody = append(currentFunction.MethodBody, body)
+						fmt.Printf("Added variable for method call: %s to method: %s in class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
+					}
+
+					// Store the last called method details for potential return handling
+					//lastCalledMethodClass = calledClass
+					lastCalledMethodName = message.Name
+				}
+
+			case "-->>":
+				// This is a return message
+				// It means the previously called method (in lastCalledMethodClass) returns a value
+				if currentFunction == nil || currentFunctionClass == nil {
+					fmt.Println("No context for current function. Skipping return value assignment.")
+					continue
+				}
+
+				// Rename the temporary variable created for the last called method to the returned name (message.Name)
+				if lastCalledMethodName == "" {
+					fmt.Printf("No previous method call to assign return value: %s\n", message.Name)
+					continue
+				}
+
+				// Find the variable in the current function's body corresponding to the last called method
+				updated := false
+				for i, body := range currentFunction.MethodBody {
+					if body.IsVariable && body.FunctionName == lastCalledMethodName {
+						currentFunction.MethodBody[i].Variable.Name = message.Name
+						updated = true
+						fmt.Printf("Assigned return value name: %s to variable in method: %s of class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
+						break
+					}
+				}
+
+				if !updated {
+					fmt.Printf("Couldn't assign return value name for method: %s\n", currentFunction.Name)
+				}
+
+				// Reset last called method info
+				lastCalledMethodName = ""
+
+			default:
+				// Other message types if any, currently not handled
+			}
 		}
 	}
 
@@ -170,6 +272,7 @@ func processMessageInstruction(message *reader.Message, classes map[string]*gene
 	fmt.Printf("Found class: %s and method: %s\n", class.ClassName, method.Name)
 }
 
+// Helper functions
 func findClass(classes map[string]*generator.Class, className string) *generator.Class {
 	if class, exists := classes[className]; exists {
 		return class
@@ -178,12 +281,19 @@ func findClass(classes map[string]*generator.Class, className string) *generator
 }
 
 func findMethod(class *generator.Class, methodName string) *generator.Method {
-	for _, method := range class.Methods {
+	for i, method := range class.Methods {
 		if method.Name == methodName {
-			return &method
+			return &class.Methods[i]
 		}
 	}
 	return nil
+}
+
+func capitalize(str string) string {
+	if len(str) == 0 {
+		return str
+	}
+	return strings.ToUpper(string(str[0])) + str[1:]
 }
 
 // parseVisibility maps Mermaid visibility symbols to Java access modifiers.

@@ -45,7 +45,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{- range .MethodBody }}
         {{- if .IsDeclaration }}
         {{- with .Variable }}
-        {{ .Type }} {{ .Name }}{{ if .IsAttributeInitialized }} = {{ .Value }}{{ end }};
+        {{ .Variable.Type }} {{ .Variable.Name }}{{ if .IsAttributeInitialized }} = {{ .Value }}{{ end }};
         {{- end }}
         {{- else if .IsCondition }}
         if ({{ .Condition }}) {
@@ -63,7 +63,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{- else if .IsObjectCreation }}
         {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else if .IsVariable }}
-        {{ .Type }} {{ .Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{ .Variable.Type }} {{ .Variable.Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else }}
         {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- end }}
