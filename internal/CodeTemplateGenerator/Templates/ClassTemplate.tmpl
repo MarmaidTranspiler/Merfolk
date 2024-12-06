@@ -45,7 +45,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{- range .MethodBody }}
         {{- if .IsDeclaration }}
         {{- with .Variable }}
-        {{ .Variable.Type }} {{ .Variable.Name }}{{ if .IsAttributeInitialized }} = {{ .Value }}{{ end }};
+        {{ .Type }} {{ .Name }}{{ if .Value }} = {{ stringFormation .Type .Value }}{{ end }};
         {{- end }}
         {{- else if .IsCondition }}
         if ({{ .Condition }}) {
@@ -60,20 +60,23 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
             {{- end }}
         }
         {{- end }}
+
         {{- else if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else if .IsVariable }}
         {{ .Variable.Type }} {{ .Variable.Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else }}
         {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+
         {{- end }}
 
-        {{- if ne $method.ReturnType "void" }}
-        return {{ if $method.ReturnValue }}{{ if eq .IsVariable false }}{{ stringFormation $method.ReturnType $method.ReturnValue }}{{ else }}{{ $method.ReturnValue }}{{ end }}{{ else }}{{ defaultZero $method.ReturnType }}{{ end }};
         {{- end }}
-        {{- end }}
+        {{ if ne .ReturnType "void" }}
+        return {{ if .ReturnValue }}{{ .ReturnValue }}{{ else }}{{ defaultZero .ReturnType }}{{ end }};
+        {{ end }}
     }
 {{- end }}
+
 
 }
 

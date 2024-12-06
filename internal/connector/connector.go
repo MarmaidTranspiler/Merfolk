@@ -142,108 +142,109 @@ func TransformSequenceDiagram(
 
 	var currentFunction *generator.Method
 	var currentFunctionClass *generator.Class
-	//var lastCalledMethodClass *generator.Class
 	var lastCalledMethodName string
+	//var lastCalledMethodParams []string
 
 	for _, instruction := range sequenceDiagram.Instructions {
-		if instruction.Message != nil {
-			message := instruction.Message
+		if instruction.Message == nil {
+			continue
+		}
+		message := instruction.Message
 
-			switch message.Type {
-			case "->>":
-				// Method call
-				// Check if we already have a current function defined
-				if currentFunction == nil {
-					// This is the first call in the sequence
-					// The right side should be a class with the method defined
-					targetClass := findClass(classes, message.Right)
-					if targetClass == nil {
-						fmt.Printf("Couldn't find class: %s\n", message.Right)
-						continue
-					}
-
-					targetMethod := findMethod(targetClass, message.Name)
-					if targetMethod == nil {
-						fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
-						continue
-					}
-
-					// Set the current function context
-					currentFunction = targetMethod
-					currentFunctionClass = targetClass
-					fmt.Printf("Current function set to %s.%s\n", currentFunctionClass.ClassName, currentFunction.Name)
-
-					// The left side could be an actor or a class, but we don't need it for now
-					// This just sets the context that we are now "inside" this function
-				} else {
-					// We are inside a function, calling another method
-					calledClass := findClass(classes, message.Right)
-					if calledClass == nil {
-						// The caller could be an actor or a non-existing class. If it's critical, print error:
-						fmt.Printf("Couldn't find class: %s\n", message.Right)
-						continue
-					}
-
-					calledMethod := findMethod(calledClass, message.Name)
-					if calledMethod == nil {
-						fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
-						continue
-					}
-
-					// If calledMethod has a return type, create a temporary variable for it
-					if calledMethod.ReturnType != "" {
-						body := generator.Body{
-							IsVariable:   true,
-							FunctionName: message.Name,
-							Variable: generator.Attribute{
-								Name: fmt.Sprintf("temp%s", capitalize(message.Name)), // Temporary variable name
-								Type: calledMethod.ReturnType,
-							},
-						}
-						currentFunction.MethodBody = append(currentFunction.MethodBody, body)
-						fmt.Printf("Added variable for method call: %s to method: %s in class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
-					}
-
-					// Store the last called method details for potential return handling
-					//lastCalledMethodClass = calledClass
-					lastCalledMethodName = message.Name
+		switch message.Type {
+		case "->>": // Method call
+			// If we don't have a current function yet, this call sets it
+			if currentFunction == nil {
+				// Right side class must define the method
+				targetClass := findClass(classes, message.Right)
+				if targetClass == nil {
+					fmt.Printf("Couldn't find class: %s\n", message.Right)
+					continue
 				}
-
-			case "-->>":
-				// This is a return message
-				// It means the previously called method (in lastCalledMethodClass) returns a value
-				if currentFunction == nil || currentFunctionClass == nil {
-					fmt.Println("No context for current function. Skipping return value assignment.")
+				targetMethod := findMethod(targetClass, message.Name)
+				if targetMethod == nil {
+					fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
+					continue
+				}
+				currentFunction = targetMethod
+				currentFunctionClass = targetClass
+				fmt.Printf("Current function set to %s.%s\n", currentFunctionClass.ClassName, currentFunction.Name)
+			} else {
+				// We are inside a function calling another method
+				calledClass := findClass(classes, message.Right)
+				if calledClass == nil {
+					fmt.Printf("Couldn't find class: %s\n", message.Right)
+					continue
+				}
+				calledMethod := findMethod(calledClass, message.Name)
+				if calledMethod == nil {
+					fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
 					continue
 				}
 
-				// Rename the temporary variable created for the last called method to the returned name (message.Name)
-				if lastCalledMethodName == "" {
-					fmt.Printf("No previous method call to assign return value: %s\n", message.Name)
-					continue
-				}
-
-				// Find the variable in the current function's body corresponding to the last called method
-				updated := false
-				for i, body := range currentFunction.MethodBody {
-					if body.IsVariable && body.FunctionName == lastCalledMethodName {
-						currentFunction.MethodBody[i].Variable.Name = message.Name
-						updated = true
-						fmt.Printf("Assigned return value name: %s to variable in method: %s of class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
-						break
+				// Prepare parameters for the call
+				callParams := []generator.Attribute{}
+				// `message.Parameters` are the actual arguments (like 'user', 'password')
+				// `calledMethod.Parameters` contain the defined parameter types and names
+				for i, paramArg := range message.Parameters {
+					if i < len(calledMethod.Parameters) {
+						definedParam := calledMethod.Parameters[i]
+						callParams = append(callParams, generator.Attribute{
+							Name: paramArg,
+							Type: definedParam.Type,
+						})
+					} else {
+						// If mismatch, handle gracefully
+						callParams = append(callParams, generator.Attribute{
+							Name: paramArg,
+							Type: "String", // fallback or handle differently
+						})
 					}
 				}
 
-				if !updated {
-					fmt.Printf("Couldn't assign return value name for method: %s\n", currentFunction.Name)
+				body := generator.Body{
+					IsVariable:        true,
+					FunctionName:      message.Name,
+					ObjFuncParameters: callParams,
+					Variable: generator.Attribute{
+						Name: fmt.Sprintf("temp%s", capitalize(message.Name)),
+						Type: calledMethod.ReturnType,
+					},
 				}
+				currentFunction.MethodBody = append(currentFunction.MethodBody, body)
+				fmt.Printf("Added variable for method call: %s to method: %s in class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
 
-				// Reset last called method info
-				lastCalledMethodName = ""
-
-			default:
-				// Other message types if any, currently not handled
+				lastCalledMethodName = message.Name
+				//lastCalledMethodParams = message.Parameters
 			}
+
+		case "-->>": // Return value
+			if currentFunction == nil {
+				fmt.Println("No context for current function. Skipping return value assignment.")
+				continue
+			}
+			if lastCalledMethodName == "" {
+				fmt.Printf("No previous method call to assign return value: %s\n", message.Name)
+				continue
+			}
+
+			// Find the variable from the last call and rename it
+			updated := false
+			for i, body := range currentFunction.MethodBody {
+				if body.IsVariable && body.FunctionName == lastCalledMethodName {
+					currentFunction.MethodBody[i].Variable.Name = message.Name
+					updated = true
+					fmt.Printf("Assigned return value name: %s to variable in method: %s of class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
+					break
+				}
+			}
+
+			if !updated {
+				fmt.Printf("Couldn't assign return value name for method: %s\n", currentFunction.Name)
+			}
+
+			lastCalledMethodName = ""
+			//lastCalledMethodParams = nil
 		}
 	}
 
