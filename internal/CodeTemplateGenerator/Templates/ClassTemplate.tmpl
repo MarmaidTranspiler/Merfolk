@@ -7,8 +7,8 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
     // default constructor
     public {{.ClassName}}() {
         {{- range .Attributes }}
-        {{- if and (not .IsClassVariable) (not .IsConstant) (not .IsAttributeInitialized) }}
-        this.{{.Name}} = {{ if .IsObject }}new {{.Type}}({{range $index, $arg := .ObjectConstructorArgs}}{{if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}}{{end}}){{ else }}{{defaultZero .Type}}{{- end }};
+        {{- if and (not .IsClassVariable) (not .IsConstant)}}
+        this.{{.Name}} = {{ defaultZero .Type}};
         {{- end}}
         {{- end }}
     }
@@ -60,7 +60,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         }
         {{- end }}
         {{- else if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else if .IsVariable }}
         {{ .Type }} {{ .Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else }}
@@ -68,7 +68,7 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{- end }}
 
         {{- if ne $method.ReturnType "void" }}
-        return {{ if $method.ReturnValue }}{{ if eq .IsVariable false }}{{ stringFormation $method.ReturnType $method.ReturnValue }}{{ else }}{{ $method.ReturnValue }}{{ end }}{{ else }}{{ defaultZero $method.ReturnType }}{{ end }};
+        return {{ if $method.ReturnValue }}{{ $method.ReturnValue }}{{ else }}{{ defaultZero $method.ReturnType }}{{ end }};
         {{- end }}
         {{- end }}
     }
