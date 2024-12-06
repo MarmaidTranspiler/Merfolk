@@ -131,94 +131,58 @@ func TransformSequenceDiagram(
 	sequenceDiagram *reader.SequenceDiagram,
 	classes map[string]*generator.Class,
 	classTemplatePath, outputDir string,
-) error {
+) {
 	if sequenceDiagram == nil {
-		return fmt.Errorf("sequence diagram is nil")
+		fmt.Println("TransformSequenceDiagram: sequence diagram is nil")
+		return
 	}
 
-	participants := make(map[string]string)
+	fmt.Println("TransformSequenceDiagram: starting transformation of sequence diagram")
 
 	for _, instruction := range sequenceDiagram.Instructions {
-		switch {
-		case instruction.Member != nil:
-			member := instruction.Member
-			participants[member.Name] = member.Name
-
-			if _, exists := classes[member.Name]; exists {
-				continue
-			}
-
-			classes[member.Name] = &generator.Class{
-				ClassName:  member.Name,
-				Attributes: []generator.Attribute{},
-				Methods:    []generator.Method{},
-			}
-
-		case instruction.Message != nil:
-			message := instruction.Message
-			leftClass := participants[message.Left]
-			rightClass := participants[message.Right]
-
-			// Ensure participants have corresponding classes
-			if _, exists := classes[leftClass]; !exists {
-				classes[leftClass] = &generator.Class{
-					ClassName:  leftClass,
-					Attributes: []generator.Attribute{},
-					Methods:    []generator.Method{},
-				}
-			}
-			if _, exists := classes[rightClass]; !exists {
-				classes[rightClass] = &generator.Class{
-					ClassName:  rightClass,
-					Attributes: []generator.Attribute{},
-					Methods:    []generator.Method{},
-				}
-			}
-
-			// Retrieve method return type from the class diagram
-			methodReturnType := "void" // Default if method is not found
-			if class, exists := classes[rightClass]; exists {
-				for _, method := range class.Methods {
-					if method.Name == message.Name {
-						methodReturnType = method.ReturnType
-						break
-					}
-				}
-			}
-
-			// Add the method to the sender's class with the correct return type
-			method := generator.Method{
-				AccessModifier: "public",
-				Name:           message.Name,
-				ReturnType:     methodReturnType,
-				Parameters: []generator.Attribute{
-					{Name: "sender", Type: leftClass},
-					{Name: "receiver", Type: rightClass},
-				},
-				MethodBody: []generator.Body{
-					{
-						IsObjectCreation:  false,
-						FunctionName:      fmt.Sprintf("%sInstance.%s", rightClass, message.Name),
-						ObjFuncParameters: []generator.Attribute{},
-					},
-				},
-				ReturnValue: fmt.Sprintf("%sResult", message.Name),
-			}
-
-			if class, exists := classes[leftClass]; exists {
-				class.Methods = append(class.Methods, method)
-			}
+		if instruction.Message != nil {
+			processMessageInstruction(instruction.Message, classes)
 		}
 	}
 
-	// Generate Java code for all classes
-	for _, class := range classes {
-		err := generator.GenerateJavaCode(*class, filepath.Clean(outputDir)+"/", class.ClassName, classTemplatePath)
-		if err != nil {
-			return fmt.Errorf("failed to generate class %s: %w", class.ClassName, err)
-		}
+	fmt.Println("TransformSequenceDiagram: completed transformation")
+}
+
+func processMessageInstruction(message *reader.Message, classes map[string]*generator.Class) {
+	className := message.Right
+	methodName := message.Name
+
+	// Find the class
+	class := findClass(classes, className)
+	if class == nil {
+		fmt.Printf("Couldn't find class: %s\n", className)
+		return
 	}
 
+	// Find the method in the class
+	method := findMethod(class, methodName)
+	if method == nil {
+		fmt.Printf("Couldn't find method: %s in class %s\n", methodName, className)
+		return
+	}
+
+	// Print success
+	fmt.Printf("Found class: %s and method: %s\n", class.ClassName, method.Name)
+}
+
+func findClass(classes map[string]*generator.Class, className string) *generator.Class {
+	if class, exists := classes[className]; exists {
+		return class
+	}
+	return nil
+}
+
+func findMethod(class *generator.Class, methodName string) *generator.Method {
+	for _, method := range class.Methods {
+		if method.Name == methodName {
+			return &method
+		}
+	}
 	return nil
 }
 
