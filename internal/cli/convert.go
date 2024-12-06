@@ -103,20 +103,20 @@ func Convert(args []string) {
 	}
 
 	// Process sequence diagrams and integrate with classes
-	for _, sequenceDiagram := range sequenceDiagrams {
-		err := connector.TransformSequenceDiagram(
-			sequenceDiagram,
-			classes, // Modify existing class definitions
-			"internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl", // No immediate output yet
-			"",
-		)
-		if err != nil {
-			fmt.Println("Error processing sequence diagram:", err)
-		} else {
-			fmt.Println("Successfully processed sequence diagram.")
+	/*	for _, sequenceDiagram := range sequenceDiagrams {
+			err := connector.TransformSequenceDiagram(
+				sequenceDiagram,
+				classes, // Modify existing class definitions
+				"internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl", // No immediate output yet
+				outputDir+"/",
+			)
+			if err != nil {
+				fmt.Println("Error processing sequence diagram:", err)
+			} else {
+				fmt.Println("Successfully processed sequence diagram.")
+			}
 		}
-	}
-
+	*/
 	// Generate Java code for all classes and interfaces
 	classTemplatePath := "internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl"
 	interfaceTemplatePath := "internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl"

@@ -7,11 +7,12 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
     // default constructor
     public {{.ClassName}}() {
         {{- range .Attributes }}
-        {{- if and (not .IsClassVariable) (not .IsConstant) (not .IsAttributeInitialized) }}
-        this.{{.Name}} = {{ if .IsObject }}new {{.Type}}({{range $index, $arg := .ObjectConstructorArgs}}{{if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}}{{end}}){{ else }}{{defaultZero .Type}}{{- end }};
+        {{- if and (not .IsClassVariable) (not .IsConstant)}}
+        this.{{.Name}} = {{if .Value}}{{.Value}}{{else}}null{{end}};
         {{- end}}
-        {{- end }}
+        {{- end}}
     }
+
 
     // constructor with all arguments
     public {{.ClassName}}(
