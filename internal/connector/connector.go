@@ -132,123 +132,271 @@ func TransformSequenceDiagram(
 	sequenceDiagram *reader.SequenceDiagram,
 	classes map[string]*generator.Class,
 	classTemplatePath, outputDir string,
-) {
+) error {
 	if sequenceDiagram == nil {
 		fmt.Println("TransformSequenceDiagram: sequence diagram is nil")
-		return
+		return errors.New("sequence diagram is nil")
 	}
 
 	fmt.Println("TransformSequenceDiagram: starting transformation of sequence diagram")
 
-	var currentFunction *generator.Method
-	var currentFunctionClass *generator.Class
-	var lastCalledMethodName string
-	//var lastCalledMethodParams []string
+	type methodContext struct {
+		class  *generator.Class
+		method *generator.Method
+	}
+	var callStack []methodContext
+
+	// callReturnStack holds references to the caller and line index for each method call
+	// Each entry: (callerClass, callerMethod, callLineIndex)
+	type callReturnInfo struct {
+		callerClass  *generator.Class
+		callerMethod *generator.Method
+		lineIndex    int
+	}
+	var callReturnStack []callReturnInfo
+
+	participants := make(map[string]bool)
+
+	var lastObjectIsConstructor bool
+	var lastObjectTempVarName string
+
+	getCurrentContext := func() (*generator.Class, *generator.Method) {
+		if len(callStack) == 0 {
+			return nil, nil
+		}
+		top := callStack[len(callStack)-1]
+		return top.class, top.method
+	}
+
+	pushContext := func(c *generator.Class, m *generator.Method) {
+		callStack = append(callStack, methodContext{class: c, method: m})
+	}
+
+	popContext := func() {
+		if len(callStack) > 0 {
+			callStack = callStack[:len(callStack)-1]
+		}
+	}
+
+	findOrCreateDummyClass := func(name string) *generator.Class {
+		if classes[name] == nil {
+			classes[name] = &generator.Class{
+				ClassName:  name,
+				Attributes: []generator.Attribute{},
+				Methods:    []generator.Method{},
+			}
+		}
+		return classes[name]
+	}
+
+	ensureObjectReference := func(
+		currentFunction *generator.Method,
+		currentFunctionClass *generator.Class,
+		targetClassName string,
+	) string {
+		if currentFunctionClass == nil || currentFunction == nil {
+			return strings.ToLower(string(targetClassName[0])) + targetClassName[1:]
+		}
+
+		for i, attr := range currentFunctionClass.Attributes {
+			if attr.Type == targetClassName {
+				return currentFunctionClass.Attributes[i].Name
+			}
+		}
+
+		for _, bodyLine := range currentFunction.MethodBody {
+			if bodyLine.IsObjectCreation && bodyLine.ObjectType == targetClassName {
+				return bodyLine.ObjectName
+			}
+		}
+
+		localVarName := strings.ToLower(string(targetClassName[0])) + targetClassName[1:]
+		newBodyLine := generator.Body{
+			IsObjectCreation: true,
+			ObjectName:       localVarName,
+			ObjectType:       targetClassName,
+		}
+		currentFunction.MethodBody = append([]generator.Body{newBodyLine}, currentFunction.MethodBody...)
+		return localVarName
+	}
 
 	for _, instruction := range sequenceDiagram.Instructions {
-		if instruction.Message == nil {
-			continue
+
+		if instruction.Member != nil {
+			member := instruction.Member
+			if member.Type == "participant" || member.Type == "actor" {
+				participants[member.Name] = true
+			}
 		}
-		message := instruction.Message
 
-		switch message.Type {
-		case "->>": // Method call
-			// If we don't have a current function yet, this call sets it
-			if currentFunction == nil {
-				// Right side class must define the method
-				targetClass := findClass(classes, message.Right)
-				if targetClass == nil {
-					fmt.Printf("Couldn't find class: %s\n", message.Right)
-					continue
-				}
-				targetMethod := findMethod(targetClass, message.Name)
-				if targetMethod == nil {
-					fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
-					continue
-				}
-				currentFunction = targetMethod
-				currentFunctionClass = targetClass
-				fmt.Printf("Current function set to %s.%s\n", currentFunctionClass.ClassName, currentFunction.Name)
-			} else {
-				// We are inside a function calling another method
-				calledClass := findClass(classes, message.Right)
-				if calledClass == nil {
-					fmt.Printf("Couldn't find class: %s\n", message.Right)
-					continue
-				}
-				calledMethod := findMethod(calledClass, message.Name)
-				if calledMethod == nil {
-					fmt.Printf("Couldn't find method: %s in class %s\n", message.Name, message.Right)
-					continue
-				}
+		if instruction.Life != nil {
+			life := instruction.Life
+			if life.Type == "create" {
+				participants[life.Name] = true
+			}
+		}
 
-				// Prepare parameters for the call
-				callParams := []generator.Attribute{}
-				// `message.Parameters` are the actual arguments (like 'user', 'password')
-				// `calledMethod.Parameters` contain the defined parameter types and names
-				for i, paramArg := range message.Parameters {
-					if i < len(calledMethod.Parameters) {
-						definedParam := calledMethod.Parameters[i]
-						callParams = append(callParams, generator.Attribute{
-							Name: paramArg,
-							Type: definedParam.Type,
-						})
+		if instruction.Message != nil {
+			message := instruction.Message
+			switch message.Type {
+			case "->>":
+				// Caller calls Callee
+				//caller := message.Left
+				callee := message.Right
+				methodName := message.Name
+				_, calleeIsParticipant := participants[callee]
+
+				cClass, cMethod := getCurrentContext()
+
+				if cMethod == nil {
+					// First call sets initial context
+					methodClass := findClass(classes, callee)
+					if methodClass == nil && !calleeIsParticipant {
+						methodClass = findOrCreateDummyClass("AssumedClass")
+					} else if methodClass == nil && calleeIsParticipant {
+						methodClass = findOrCreateDummyClass(callee)
+					}
+
+					methodObj := findMethod(methodClass, methodName)
+					if methodObj == nil {
+						newMethod := generator.Method{
+							AccessModifier: "public",
+							Name:           methodName,
+							ReturnType:     "void",
+							Parameters:     []generator.Attribute{},
+							MethodBody:     []generator.Body{},
+						}
+						methodClass.Methods = append(methodClass.Methods, newMethod)
+						methodObj = &methodClass.Methods[len(methodClass.Methods)-1]
+					}
+					pushContext(methodClass, methodObj)
+					// No caller here yet (top-level call), so no line is added.
+				} else {
+					// Add the call line to the current (caller) method
+					callerClass, callerMethod := cClass, cMethod
+
+					calleeClass := findClass(classes, callee)
+					if calleeClass == nil && !calleeIsParticipant {
+						calleeClass = findOrCreateDummyClass("AssumedClass")
+					} else if calleeClass == nil && calleeIsParticipant {
+						calleeClass = findOrCreateDummyClass(callee)
+					}
+
+					calleeMethod := findMethod(calleeClass, methodName)
+					if calleeMethod == nil {
+						newMethod := generator.Method{
+							AccessModifier: "public",
+							Name:           methodName,
+							ReturnType:     "void",
+							Parameters:     []generator.Attribute{},
+							MethodBody:     []generator.Body{},
+						}
+						calleeClass.Methods = append(calleeClass.Methods, newMethod)
+						calleeMethod = &calleeClass.Methods[len(calleeClass.Methods)-1]
+					}
+
+					// Determine call params
+					callParams := []generator.Attribute{}
+					for i, p := range message.Parameters {
+						typ := "String"
+						if i < len(calleeMethod.Parameters) {
+							typ = calleeMethod.Parameters[i].Type
+						}
+						callParams = append(callParams, generator.Attribute{Name: p, Type: typ})
+					}
+
+					returnType := calleeMethod.ReturnType
+					isVariable := returnType != "" && returnType != "void"
+
+					objectRef := callee
+					if calleeClass != nil {
+						objectRef = ensureObjectReference(callerMethod, callerClass, calleeClass.ClassName)
 					} else {
-						// If mismatch, handle gracefully
-						callParams = append(callParams, generator.Attribute{
-							Name: paramArg,
-							Type: "String", // fallback or handle differently
-						})
+						objectRef = strings.ToLower(string(callee[0])) + callee[1:]
+					}
+
+					callBody := generator.Body{
+						IsVariable:        isVariable,
+						ObjFuncParameters: callParams,
+						FunctionName:      objectRef + "." + methodName,
+					}
+					if isVariable {
+						callBody.Variable = generator.Attribute{
+							Name: "temp" + capitalize(methodName),
+							Type: returnType,
+						}
+					}
+
+					callerMethod.MethodBody = append(callerMethod.MethodBody, callBody)
+					callLineIndex := len(callerMethod.MethodBody) - 1
+
+					// Store call info for later renaming
+					callReturnStack = append(callReturnStack, callReturnInfo{
+						callerClass:  callerClass,
+						callerMethod: callerMethod,
+						lineIndex:    callLineIndex,
+					})
+
+					lastObjectIsConstructor = false
+					lastObjectTempVarName = ""
+
+					// Now push callee context
+					pushContext(calleeClass, calleeMethod)
+				}
+
+			case "-->>":
+				// Return from a method
+				_, currentMethod := getCurrentContext()
+				if currentMethod == nil {
+					fmt.Println("No current function. Skipping return assignment.")
+					continue
+				}
+
+				if lastObjectIsConstructor {
+					for i, body := range currentMethod.MethodBody {
+						if body.IsObjectCreation && body.ObjectName == lastObjectTempVarName {
+							currentMethod.MethodBody[i].ObjectName = message.Name
+							break
+						}
+					}
+					lastObjectIsConstructor = false
+					lastObjectTempVarName = ""
+				} else {
+					// Rename the variable in the caller method
+					if len(callReturnStack) == 0 {
+						fmt.Printf("No previous method call to assign return value: %s. Could not rename.\n", message.Name)
+						// We don't retrofit now because we rely on the call stack.
+						// If needed, we could fallback to a retrofit, but better to be explicit.
+					} else {
+						lastCall := callReturnStack[len(callReturnStack)-1]
+						callReturnStack = callReturnStack[:len(callReturnStack)-1]
+
+						callerMethod := lastCall.callerMethod
+						if lastCall.lineIndex >= 0 && lastCall.lineIndex < len(callerMethod.MethodBody) {
+							callLine := &callerMethod.MethodBody[lastCall.lineIndex]
+							callLine.IsVariable = true
+							// Rename to the returned name
+							if callLine.Variable.Name == "" {
+								callLine.Variable = generator.Attribute{
+									Name: message.Name,
+									Type: "String",
+								}
+							} else {
+								callLine.Variable.Name = message.Name
+							}
+						} else {
+							fmt.Printf("Couldn't assign return value name for method. Index out of range.\n")
+						}
 					}
 				}
 
-				body := generator.Body{
-					IsVariable:        true,
-					FunctionName:      message.Name,
-					ObjFuncParameters: callParams,
-					Variable: generator.Attribute{
-						Name: fmt.Sprintf("temp%s", capitalize(message.Name)),
-						Type: calledMethod.ReturnType,
-					},
-				}
-				currentFunction.MethodBody = append(currentFunction.MethodBody, body)
-				fmt.Printf("Added variable for method call: %s to method: %s in class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
-
-				lastCalledMethodName = message.Name
-				//lastCalledMethodParams = message.Parameters
+				popContext()
 			}
-
-		case "-->>": // Return value
-			if currentFunction == nil {
-				fmt.Println("No context for current function. Skipping return value assignment.")
-				continue
-			}
-			if lastCalledMethodName == "" {
-				fmt.Printf("No previous method call to assign return value: %s\n", message.Name)
-				continue
-			}
-
-			// Find the variable from the last call and rename it
-			updated := false
-			for i, body := range currentFunction.MethodBody {
-				if body.IsVariable && body.FunctionName == lastCalledMethodName {
-					currentFunction.MethodBody[i].Variable.Name = message.Name
-					updated = true
-					fmt.Printf("Assigned return value name: %s to variable in method: %s of class: %s\n", message.Name, currentFunction.Name, currentFunctionClass.ClassName)
-					break
-				}
-			}
-
-			if !updated {
-				fmt.Printf("Couldn't assign return value name for method: %s\n", currentFunction.Name)
-			}
-
-			lastCalledMethodName = ""
-			//lastCalledMethodParams = nil
 		}
 	}
 
 	fmt.Println("TransformSequenceDiagram: completed transformation")
+	return nil
 }
 
 func processMessageInstruction(message *reader.Message, classes map[string]*generator.Class) {
@@ -274,6 +422,53 @@ func processMessageInstruction(message *reader.Message, classes map[string]*gene
 }
 
 // Helper functions
+// Helper to find an attribute in the current class by type
+func findAttributeByType(class *generator.Class, typ string) *generator.Attribute {
+	for i, attr := range class.Attributes {
+		if attr.Type == typ {
+			return &class.Attributes[i]
+		}
+	}
+	return nil
+}
+
+// Helper to ensure an object reference exists for a given class type
+func ensureObjectReference(
+	currentFunction *generator.Method,
+	currentFunctionClass *generator.Class,
+	targetClassName string,
+) string {
+	// First, try to find an attribute in the class
+	attr := findAttributeByType(currentFunctionClass, targetClassName)
+	if attr != nil {
+		// Found existing attribute, use it
+		return attr.Name
+	}
+
+	// If not found as an attribute, check if we have already created one in the method
+	// For simplicity, let's assume we haven't. We create a local variable:
+	localVarName := strings.ToLower(string(targetClassName[0])) + targetClassName[1:] // e.g. AuthService -> authService
+
+	// Check if already created in MethodBody
+	for _, bodyLine := range currentFunction.MethodBody {
+		if bodyLine.IsObjectCreation && bodyLine.ObjectType == targetClassName {
+			return bodyLine.ObjectName // Already created
+		}
+	}
+
+	// Not found, create a new line in the method body at the start:
+	newBodyLine := generator.Body{
+		IsObjectCreation: true,
+		ObjectName:       localVarName,
+		ObjectType:       targetClassName,
+	}
+
+	// Insert this creation at the beginning of the method body
+	currentFunction.MethodBody = append([]generator.Body{newBodyLine}, currentFunction.MethodBody...)
+
+	return localVarName
+}
+
 func findClass(classes map[string]*generator.Class, className string) *generator.Class {
 	if class, exists := classes[className]; exists {
 		return class
