@@ -253,7 +253,7 @@ func TransformSequenceDiagram(
 					methodClass := findClass(classes, callee)
 					if methodClass == nil && !calleeIsParticipant {
 						methodClass = findOrCreateDummyClass("AssumedClass")
-					} else if methodClass == nil && calleeIsParticipant {
+					} else if methodClass == nil {
 						methodClass = findOrCreateDummyClass(callee)
 					}
 
@@ -278,7 +278,7 @@ func TransformSequenceDiagram(
 					calleeClass := findClass(classes, callee)
 					if calleeClass == nil && !calleeIsParticipant {
 						calleeClass = findOrCreateDummyClass("AssumedClass")
-					} else if calleeClass == nil && calleeIsParticipant {
+					} else if calleeClass == nil {
 						calleeClass = findOrCreateDummyClass(callee)
 					}
 
