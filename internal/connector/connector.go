@@ -353,6 +353,7 @@ func TransformSequenceDiagram(
 				}
 
 				if lastObjectIsConstructor {
+					// If the last object was created during the constructor, rename it
 					for i, body := range currentMethod.MethodBody {
 						if body.IsObjectCreation && body.ObjectName == lastObjectTempVarName {
 							currentMethod.MethodBody[i].ObjectName = message.Name
@@ -362,11 +363,10 @@ func TransformSequenceDiagram(
 					lastObjectIsConstructor = false
 					lastObjectTempVarName = ""
 				} else {
-					// Rename the variable in the caller method
+					// Rename the variable in the caller method and set it as the return value
 					if len(callReturnStack) == 0 {
 						fmt.Printf("No previous method call to assign return value: %s. Could not rename.\n", message.Name)
-						// We don't retrofit now because we rely on the call stack.
-						// If needed, we could fallback to a retrofit, but better to be explicit.
+						// No call stack entry means we can't assign return value to a previous call.
 					} else {
 						lastCall := callReturnStack[len(callReturnStack)-1]
 						callReturnStack = callReturnStack[:len(callReturnStack)-1]
@@ -379,11 +379,14 @@ func TransformSequenceDiagram(
 							if callLine.Variable.Name == "" {
 								callLine.Variable = generator.Attribute{
 									Name: message.Name,
-									Type: "String",
+									Type: "String", // If you know the return type, adjust this accordingly
 								}
 							} else {
 								callLine.Variable.Name = message.Name
 							}
+
+							// Set the caller method to return the newly named variable instead of the default placeholder
+							callerMethod.ReturnValue = message.Name
 						} else {
 							fmt.Printf("Couldn't assign return value name for method. Index out of range.\n")
 						}
@@ -395,8 +398,254 @@ func TransformSequenceDiagram(
 		}
 	}
 
+	// After processing the entire sequence diagram, fix return values for methods without return variables.
+	for _, cls := range classes {
+		for m := range cls.Methods {
+			method := &cls.Methods[m]
+			if method.ReturnType == "" || method.ReturnType == "void" {
+				continue
+			}
+
+			// Check if there's a ReturnValue
+			if method.ReturnValue == "" {
+				continue // If no return value is set, skip
+			}
+
+			returnVar := method.ReturnValue
+			returnType := method.ReturnType
+			var existingVar *generator.Attribute
+			var conflictingVar bool
+
+			// Check for variable declarations or creations in the method body
+			for _, bodyLine := range method.MethodBody {
+				if bodyLine.IsObjectCreation && bodyLine.ObjectName == returnVar {
+					if bodyLine.ObjectType == returnType {
+						existingVar = &generator.Attribute{
+							Name: returnVar,
+							Type: returnType,
+						}
+					} else {
+						conflictingVar = true
+					}
+					break
+				}
+				if bodyLine.IsDeclaration && bodyLine.Variable.Name == returnVar {
+					if bodyLine.Variable.Type == returnType {
+						existingVar = &bodyLine.Variable
+					} else {
+						conflictingVar = true
+					}
+					break
+				}
+			}
+
+			// Handle conflicts or missing declarations
+			if conflictingVar {
+				// Create a new variable with a unique name
+				uniqueVarName := returnVar + "Result"
+				if isPrimitiveType(returnType) {
+					// For primitives and String, declare and initialize with default value
+					declBody := generator.Body{
+						IsDeclaration: true,
+						Variable: generator.Attribute{
+							Name:  uniqueVarName,
+							Type:  returnType,
+							Value: defaultZero(returnType),
+						},
+					}
+					method.MethodBody = append([]generator.Body{declBody}, method.MethodBody...)
+				} else {
+					// Non-primitive: create a new object
+					creationBody := generator.Body{
+						IsObjectCreation: true,
+						ObjectName:       uniqueVarName,
+						ObjectType:       returnType,
+					}
+					method.MethodBody = append([]generator.Body{creationBody}, method.MethodBody...)
+				}
+				// Update the method to return the unique variable
+				method.ReturnValue = uniqueVarName
+			} else if existingVar == nil {
+				// No variable exists, create a new one
+				if isPrimitiveType(returnType) {
+					// For primitives and String, declare and initialize with default value
+					declBody := generator.Body{
+						IsDeclaration: true,
+						Variable: generator.Attribute{
+							Name:  returnVar,
+							Type:  returnType,
+							Value: defaultZero(returnType),
+						},
+					}
+					method.MethodBody = append([]generator.Body{declBody}, method.MethodBody...)
+				} else {
+					// Non-primitive: create a new object
+					creationBody := generator.Body{
+						IsObjectCreation: true,
+						ObjectName:       returnVar,
+						ObjectType:       returnType,
+					}
+					method.MethodBody = append([]generator.Body{creationBody}, method.MethodBody...)
+				}
+			}
+		}
+	}
+	finalizeVariableDeclarations(classes)
+
 	fmt.Println("TransformSequenceDiagram: completed transformation")
 	return nil
+}
+
+func finalizeVariableDeclarations(classes map[string]*generator.Class) {
+	for _, cls := range classes {
+		for m := range cls.Methods {
+			method := &cls.Methods[m]
+
+			// existingVars maps the originally encountered variable name to a struct containing:
+			// - The original type of the variable when first declared
+			// - The final chosen name of the variable to use in code
+			type varInfo struct {
+				varType   string
+				finalName string
+			}
+
+			existingVars := make(map[string]varInfo)
+
+			for i, bodyLine := range method.MethodBody {
+				var varName string
+				var varType string
+				var assignmentExpr string
+
+				// Extract variable information depending on line type
+				if bodyLine.IsDeclaration {
+					varName = bodyLine.Variable.Name
+					varType = bodyLine.Variable.Type
+					if bodyLine.Variable.Value != nil {
+						assignmentExpr = fmt.Sprintf("%v", bodyLine.Variable.Value)
+					} else {
+						assignmentExpr = ""
+					}
+				} else if bodyLine.IsObjectCreation {
+					varName = bodyLine.ObjectName
+					varType = bodyLine.ObjectType
+					assignmentExpr = fmt.Sprintf("new %s(", varType)
+					for pIndex, param := range bodyLine.ObjFuncParameters {
+						if pIndex > 0 {
+							assignmentExpr += ", "
+						}
+						if param.Value != nil {
+							assignmentExpr += fmt.Sprintf("%v", param.Value)
+						} else {
+							assignmentExpr += param.Name
+						}
+					}
+					assignmentExpr += ")"
+				} else if bodyLine.IsVariable {
+					varName = bodyLine.Variable.Name
+					varType = bodyLine.Variable.Type
+					// The assignment expression is basically the FunctionName plus any parameters
+					baseCall := bodyLine.FunctionName
+					if len(bodyLine.ObjFuncParameters) > 0 {
+						baseCall += ""
+						for pIndex, param := range bodyLine.ObjFuncParameters {
+							if pIndex > 0 {
+								baseCall += ", "
+							}
+							if param.Value != nil {
+								baseCall += fmt.Sprintf("%v", param.Value)
+							} else {
+								baseCall += param.Name
+							}
+						}
+						baseCall += ""
+					} else {
+						// If no parameters and FunctionName is just a call, add ()
+						if !bodyLine.IsDeclaration && !bodyLine.IsObjectCreation && bodyLine.FunctionName != "" {
+							baseCall += ""
+						}
+					}
+					assignmentExpr = baseCall
+				} else {
+					// No variable line, skip
+					method.MethodBody[i] = bodyLine
+					continue
+				}
+
+				if varName == "" || varType == "" {
+					// If we don't have a varName or varType, just set and continue
+					method.MethodBody[i] = bodyLine
+					continue
+				}
+
+				info, alreadyDeclared := existingVars[varName]
+				if !alreadyDeclared {
+					// First time we see this variable
+					existingVars[varName] = varInfo{
+						varType:   varType,
+						finalName: varName, // finalName is the same at first declaration
+					}
+					// The line stays as a declaration or object creation as is
+					method.MethodBody[i] = bodyLine
+				} else {
+					// Variable name seen before
+					if info.varType == varType {
+						// Same type: This is a re-assignment
+						finalName := info.finalName
+						// Convert this line into a reassignment line
+						bodyLine.IsDeclaration = false
+						bodyLine.IsObjectCreation = false
+						bodyLine.IsVariable = false
+						// Just varName = assignmentExpr
+						bodyLine.Variable = generator.Attribute{}
+						bodyLine.ObjFuncParameters = []generator.Attribute{}
+						bodyLine.FunctionName = fmt.Sprintf("%s = %s", finalName, assignmentExpr)
+						// finalName doesn't change
+						method.MethodBody[i] = bodyLine
+					} else {
+						// Different type: we must rename the new variable to avoid conflict
+						// The original variable keeps its finalName, we rename this second declaration
+						newName := varName + "Temp"
+						// Update existingVars for the new type+name combination
+						existingVars[varName] = varInfo{
+							varType:   varType,
+							finalName: newName,
+						}
+						// Convert to reassignment line
+						bodyLine.IsDeclaration = false
+						bodyLine.IsObjectCreation = false
+						bodyLine.IsVariable = false
+						bodyLine.Variable = generator.Attribute{}
+						bodyLine.ObjFuncParameters = []generator.Attribute{}
+						bodyLine.FunctionName = fmt.Sprintf("%s = %s", newName, assignmentExpr)
+						method.MethodBody[i] = bodyLine
+					}
+				}
+			}
+		}
+	}
+}
+
+func isPrimitiveType(typeName string) bool {
+	primitiveTypes := map[string]bool{
+		"int":     true,
+		"boolean": true,
+		"double":  true,
+		"float":   true,
+	}
+	return primitiveTypes[typeName]
+}
+
+func defaultZero(typeName string) any {
+	switch typeName {
+	case "int":
+		return "0"
+	case "boolean":
+		return "false"
+	case "double", "float":
+		return "0.0"
+	default:
+		return nil // Objects don't have default values; they are initialized with `new`
+	}
 }
 
 func processMessageInstruction(message *reader.Message, classes map[string]*generator.Class) {
