@@ -315,11 +315,24 @@ func TransformSequenceDiagram(
 						objectRef = strings.ToLower(string(callee[0])) + callee[1:]
 					}
 
-					callBody := generator.Body{
-						IsVariable:        isVariable,
-						ObjFuncParameters: callParams,
-						FunctionName:      objectRef + "." + methodName,
+					callBody := generator.Body{}
+					if calleeMethod.Name == calleeClass.ClassName {
+						callBody = generator.Body{
+							IsObjectCreation:  true,
+							ObjectName:        strings.ToLower(methodName),
+							ObjectType:        calleeClass.ClassName,
+							IsVariable:        isVariable,
+							ObjFuncParameters: callParams,
+							FunctionName:      objectRef + "." + methodName,
+						}
+					} else {
+						callBody = generator.Body{
+							IsVariable:        isVariable,
+							ObjFuncParameters: callParams,
+							FunctionName:      objectRef + "." + methodName,
+						}
 					}
+
 					if isVariable {
 						callBody.Variable = generator.Attribute{
 							Name: "temp" + capitalize(methodName),
