@@ -545,26 +545,8 @@ func finalizeVariableDeclarations(classes map[string]*generator.Class) {
 					varType = bodyLine.Variable.Type
 					// The assignment expression is basically the FunctionName plus any parameters
 					baseCall := bodyLine.FunctionName
-					if len(bodyLine.ObjFuncParameters) > 0 {
-						baseCall += ""
-						for pIndex, param := range bodyLine.ObjFuncParameters {
-							if pIndex > 0 {
-								baseCall += ", "
-							}
-							if param.Value != nil {
-								baseCall += fmt.Sprintf("%v", param.Value)
-							} else {
-								baseCall += param.Name
-							}
-						}
-						baseCall += ""
-					} else {
-						// If no parameters and FunctionName is just a call, add ()
-						if !bodyLine.IsDeclaration && !bodyLine.IsObjectCreation && bodyLine.FunctionName != "" {
-							baseCall += ""
-						}
-					}
 					assignmentExpr = baseCall
+
 				} else {
 					// No variable line, skip
 					method.MethodBody[i] = bodyLine
@@ -597,7 +579,7 @@ func finalizeVariableDeclarations(classes map[string]*generator.Class) {
 						bodyLine.IsVariable = false
 						// Just varName = assignmentExpr
 						bodyLine.Variable = generator.Attribute{}
-						bodyLine.ObjFuncParameters = []generator.Attribute{}
+						//bodyLine.ObjFuncParameters = []generator.Attribute{}
 						bodyLine.FunctionName = fmt.Sprintf("%s = %s", finalName, assignmentExpr)
 						// finalName doesn't change
 						method.MethodBody[i] = bodyLine
