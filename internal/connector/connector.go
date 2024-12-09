@@ -509,6 +509,7 @@ func TransformSequenceDiagram(
 	return nil
 }
 
+// Helper functions
 func finalizeVariableDeclarations(classes map[string]*generator.Class) {
 	for _, cls := range classes {
 		for m := range cls.Methods {
@@ -599,7 +600,7 @@ func finalizeVariableDeclarations(classes map[string]*generator.Class) {
 					} else {
 						// Different type: we must rename the new variable to avoid conflict
 						// The original variable keeps its finalName, we rename this second declaration
-						newName := varName + "Temp"
+						newName := varName /*+ "Temp"*/
 						// Update existingVars for the new type+name combination
 						existingVars[varName] = varInfo{
 							varType:   varType,
@@ -641,76 +642,6 @@ func defaultZero(typeName string) any {
 	default:
 		return nil // Objects don't have default values; they are initialized with `new`
 	}
-}
-
-func processMessageInstruction(message *reader.Message, classes map[string]*generator.Class) {
-	className := message.Right
-	methodName := message.Name
-
-	// Find the class
-	class := findClass(classes, className)
-	if class == nil {
-		fmt.Printf("Couldn't find class: %s\n", className)
-		return
-	}
-
-	// Find the method in the class
-	method := findMethod(class, methodName)
-	if method == nil {
-		fmt.Printf("Couldn't find method: %s in class %s\n", methodName, className)
-		return
-	}
-
-	// Print success
-	fmt.Printf("Found class: %s and method: %s\n", class.ClassName, method.Name)
-}
-
-// Helper functions
-// Helper to find an attribute in the current class by type
-func findAttributeByType(class *generator.Class, typ string) *generator.Attribute {
-	for i, attr := range class.Attributes {
-		if attr.Type == typ {
-			return &class.Attributes[i]
-		}
-	}
-	return nil
-}
-
-// Helper to ensure an object reference exists for a given class type
-func ensureObjectReference(
-	currentFunction *generator.Method,
-	currentFunctionClass *generator.Class,
-	targetClassName string,
-) string {
-	// First, try to find an attribute in the class
-	attr := findAttributeByType(currentFunctionClass, targetClassName)
-	if attr != nil {
-		// Found existing attribute, use it
-		return attr.Name
-	}
-
-	// If not found as an attribute, check if we have already created one in the method
-	// For simplicity, let's assume we haven't. We create a local variable:
-	localVarName := strings.ToLower(string(targetClassName[0])) + targetClassName[1:] // e.g. AuthService -> authService
-
-	// Check if already created in MethodBody
-	for _, bodyLine := range currentFunction.MethodBody {
-		if bodyLine.IsObjectCreation && bodyLine.ObjectType == targetClassName {
-			return bodyLine.ObjectName // Already created
-		}
-	}
-
-	// Not found, create a new line in the method body at the start:
-	newBodyLine := generator.Body{
-		IsObjectCreation: true,
-		ObjectName:       localVarName,
-		ObjectType:       targetClassName,
-	}
-
-	// Insert this creation at the beginning of the method body
-	currentFunction.MethodBody = append([]generator.Body{newBodyLine}, currentFunction.MethodBody...)
-
-	return localVarName
 }
 
 func findClass(classes map[string]*generator.Class, className string) *generator.Class {
