@@ -51,14 +51,11 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
 {{- range .Methods }}
     {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
         {{- $method := . }}
-
         {{- range .MethodBody }}
         {{- if .IsDeclaration }}
-        {{- with .Variable }}
-        {{ .Type }} {{ .Name }}{{ if .IsAttributeInitialized }} = {{ .Value }}{{ end }};
-        {{- end }}
+        {{ .Variable.Type }} {{ .Variable.Name }}{{ if .Variable.IsAttributeInitialized }} = {{ stringFormation .Variable.Type .Variable.Value }}{{ end }};
         {{- else if .IsCondition }}
-        if ({{ .Condition }}) {
+        if({{ .Condition }}) {
             {{- range .IfBody }}
             {{- template "BodyTemplate" . }}
             {{- end }}
@@ -71,46 +68,51 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         }
         {{- end }}
         {{- else if .IsObjectCreation }}
-        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Typ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- else if .IsVariable }}
-        {{ .Type }} {{ .Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-        {{- else }}
+		{{ $func := . }}
+		{{- with .Variable }}
+        {{ .Type }} {{ .Name }} = {{ $func.FunctionName }}({{- range $index, $param := $func.ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+		{{- end }}
+		{{- else }}
         {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
         {{- end }}
-        
+        {{- end }}
 
         {{- if ne $method.ReturnType "void" }}
-        return {{ if $method.ReturnValue }}{{ if eq .IsVariable false }}{{ stringFormation $method.ReturnType $method.ReturnValue }}{{ else }}{{ $method.ReturnValue }}{{ end }}{{ else }}{{ defaultZero $method.ReturnType }}{{ end }};
-        {{- end }}
-		{{- end }}
+		return {{ if .ReturnValue }}{{ .ReturnValue }}{{ else }}{{ defaultZero .ReturnType }}{{ end }};
+        {{ end }}
+		
     }
 {{- end }}
 
 }
 
 {{- define "BodyTemplate" }}
-{{- if .IsDeclaration }}
-{{- range .Variable }}
-{{ .Type }} {{ .Name }}{{ if .Value }} = {{ stringFormation .Type .Value }}{{ end }};
-{{- end }}
-{{- else if .IsObjectCreation }}
-{{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{ if $index }}, {{ end }}{{ if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-{{- else if .IsCondition }}
-if ({{ .Condition }}) {
-    {{- range .IfBody }}
-    {{- template "BodyTemplate" . }}
+	{{- if .IsDeclaration }}
+        {{- if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else if .FunctionName}}
+        {{ .Variable.Type }} {{ .Variable.Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else}}
+        {{ .Variable.Type }} {{ .Variable.Name }} = {{ stringFormation .Variable.Type .Variable.Value }};
+        {{- end }}
+    {{- else if .IsCondition }}
+        if ({{ .Condition }}) {
+            {{- range .IfBody }}
+            {{- template "BodyTemplate" . }}
+            {{- end }}
+        }
+        {{- if .ElseBody }}
+        else {
+            {{- range .ElseBody }}
+            {{- template "BodyTemplate" . }}
+            {{- end }}
+        }
+        {{- end }}
+    {{- else }}
+        {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
     {{- end }}
-}
-{{- if .ElseBody }}
-else {
-    {{- range .ElseBody }}
-    {{- template "BodyTemplate" . }}
-    {{- end }}
-}
-{{- end }}
-{{- else }}
-{{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{ if $index }}, {{ end }}{{ if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
-{{- end }}
 {{- end }}`
 
 var PATHINTERFACE = `
@@ -736,7 +738,16 @@ func TestClassExtendsAndImplements(t *testing.T) {
 
 	expected := `
 	public class ComplexClass extends BaseClass implements InterfaceA, InterfaceB {
-	    public int complexMethod(int value) {
+	    
+		// default constructor 
+		public ComplexClass() {
+		}
+
+		// constructor with all arguments 
+		public ComplexClass() {
+		}
+
+		public int complexMethod(int value) {
 			return 0;
 	    }
 	}
@@ -758,6 +769,7 @@ func TestMethodReturnsObject(t *testing.T) {
 		ClassName: "ObjectReturningClass",
 		Methods: []Method{
 			{
+				ReturnValue:    "obj",
 				AccessModifier: "public",
 				Name:           "createObject",
 				ReturnType:     "CustomObject",
@@ -771,13 +783,23 @@ func TestMethodReturnsObject(t *testing.T) {
 						},
 					},
 				},
-				ReturnValue: "obj",
 			},
 		},
 	}
 
 	expected := `
 	    public class ObjectReturningClass {
+		
+		// default constructor 
+		public ObjectReturningClass() { 
+		
+		} 
+		
+		// constructor with all arguments 
+		public ObjectReturningClass() {
+		
+		}
+		
 	    public CustomObject createObject() {
 	        CustomObject obj = new CustomObject("Test");
 	        return obj;
@@ -857,8 +879,14 @@ func TestMethodInteractionExample(t *testing.T) {
 				AccessModifier: "public",
 				Name:           "getNiceString",
 				ReturnType:     "String",
-				ReturnValue:    "nice",
-				MethodBody:     []Body{},
+				ReturnValue:    "result",
+				MethodBody: []Body{
+					{
+						IsDeclaration: true,
+						Variable: Attribute{
+							Name: "result", Type: "String", Value: "nice", IsAttributeInitialized: true},
+					},
+				},
 			},
 			{
 				AccessModifier: "public",
@@ -882,10 +910,14 @@ func TestMethodInteractionExample(t *testing.T) {
 				ReturnType:     "void",
 				MethodBody: []Body{
 					{
-						FunctionName:     "getNiceString",
-						ObjectName:       "result",
-						ObjectType:       "String",
-						IsObjectCreation: false,
+						FunctionName:      "getNiceString",
+						ObjectName:        "result",
+						ObjectType:        "String",
+						ObjFuncParameters: []Attribute{},
+						IsObjectCreation:  false,
+						IsDeclaration:     false,
+						IsVariable:        true,
+						Variable:          Attribute{Type: "String", Name: "result"},
 					},
 					{
 						FunctionName: "printString",
@@ -908,7 +940,8 @@ func TestMethodInteractionExample(t *testing.T) {
 		} 
 
 		public String getNiceString() {
-            return "nice";
+            String result = "nice";
+			return result;
         }
 
         public void printString(String input) {
@@ -940,15 +973,15 @@ func TestComplexMethodWithConditions(t *testing.T) {
 				AccessModifier: "public",
 				Name:           "processValue",
 				ReturnType:     "String",
+				ReturnValue:    "result",
 				Parameters: []Attribute{
 					{Name: "value", Type: "int"},
 				},
 				MethodBody: []Body{
 					{
 						IsDeclaration: true,
-						ObjFuncParameters: []Attribute{
-							{Name: "result", Type: "String", Value: "\"Default\"", IsAttributeInitialized: true},
-						},
+						Variable: Attribute{
+							Name: "result", Type: "String", Value: "Default", IsAttributeInitialized: true},
 					},
 					{
 						IsCondition: true,
@@ -957,13 +990,13 @@ func TestComplexMethodWithConditions(t *testing.T) {
 							{
 								FunctionName: "System.out.println",
 								ObjFuncParameters: []Attribute{
-									{Value: "\"Positive value\"", Type: "String"},
+									{Value: "Positive value", Type: "String"},
 								},
 							},
 							{
 								FunctionName: "result.concat",
 								ObjFuncParameters: []Attribute{
-									{Value: " Processed\"", Type: "String"},
+									{Value: "Processed", Type: "String"},
 								},
 							},
 						},
@@ -971,15 +1004,9 @@ func TestComplexMethodWithConditions(t *testing.T) {
 							{
 								FunctionName: "System.out.println",
 								ObjFuncParameters: []Attribute{
-									{Value: "\"Non-positive value\"", Type: "String"},
+									{Value: "Non-positive value", Type: "String"},
 								},
 							},
-						},
-					},
-					{
-						FunctionName: "return",
-						ObjFuncParameters: []Attribute{
-							{Value: "result", Type: "String"},
 						},
 					},
 				},
@@ -998,9 +1025,9 @@ func TestComplexMethodWithConditions(t *testing.T) {
 		}
         public String processValue(int value) {
             String result = "Default";
-            if (value > 0) {
+            if(value > 0) {
                 System.out.println("Positive value");
-                result.concat(" Processed");
+                result.concat("Processed");
             } else {
                 System.out.println("Non-positive value");
             }
@@ -1028,6 +1055,7 @@ func TestStaticMethodWithMultipleParameters(t *testing.T) {
 				Name:           "calculateSum",
 				IsStatic:       true,
 				ReturnType:     "int",
+				ReturnValue:    "sum",
 				Parameters: []Attribute{
 					{Name: "a", Type: "int"},
 					{Name: "b", Type: "int"},
@@ -1035,10 +1063,11 @@ func TestStaticMethodWithMultipleParameters(t *testing.T) {
 				},
 				MethodBody: []Body{
 					{
-						IsDeclaration: true,
-						ObjFuncParameters: []Attribute{
-							{Name: "sum", Type: "int", Value: "a + b + c", IsAttributeInitialized: true},
-						},
+						IsDeclaration:    true,
+						IsObjectCreation: false,
+						FunctionName:     "",
+						Variable: Attribute{
+							Name: "sum", Type: "int", Value: "a + b + c", IsAttributeInitialized: true},
 					},
 					{
 						IsCondition: true,
@@ -1047,15 +1076,9 @@ func TestStaticMethodWithMultipleParameters(t *testing.T) {
 							{
 								FunctionName: "System.out.println",
 								ObjFuncParameters: []Attribute{
-									{Value: "\"Positive sum\"", Type: "String"},
+									{Value: "Positive sum", Type: "String"},
 								},
 							},
-						},
-					},
-					{
-						FunctionName: "return",
-						ObjFuncParameters: []Attribute{
-							{Value: "sum", Type: "int"},
 						},
 					},
 				},
@@ -1074,13 +1097,102 @@ func TestStaticMethodWithMultipleParameters(t *testing.T) {
 		}
         public static int calculateSum(int a, int b, int c) {
             int sum = a + b + c;
-            if (sum > 0) {
+            if(sum > 0) {
                 System.out.println("Positive sum");
             }
             return sum;
         }
     }
     `
+
+	output, err := renderTemplate(PATHCLASS, class)
+	if err != nil {
+		t.Fatalf("Error rendering template: %v", err)
+	}
+
+	if normalizeCode(output) != normalizeCode(expected) {
+		t.Errorf("Mismatch!\nExpected:\n%s\nGot:\n%s\n", normalizeCode(expected), normalizeCode(output))
+	}
+}
+
+func TestIfStatement(t *testing.T) {
+	class := Class{
+		ClassName: "Testif",
+		Methods: []Method{
+			{
+				AccessModifier: "public",
+				Name:           "checkValue",
+				IsStatic:       false,
+				ReturnType:     "String",
+				ReturnValue:    "result",
+				Parameters: []Attribute{
+					{
+						Name: "input",
+						Type: "int",
+					},
+				},
+				MethodBody: []Body{
+					{
+						IsDeclaration: true,
+						Variable: Attribute{
+							Type: "String",
+							Name: "result",
+						},
+					},
+					{
+						IsCondition: true,
+						Condition:   "input > 10",
+						IfBody: []Body{
+							{
+								IsDeclaration: true,
+								IsVariable:    true,
+								Variable: Attribute{
+									IsAttributeInitialized: true,
+									Name:                   "result",
+									Type:                   "String",
+									Value:                  "Greater than 10",
+								},
+							},
+						},
+						ElseBody: []Body{
+							{
+								IsDeclaration: true,
+								IsVariable:    true,
+								Variable: Attribute{
+									IsAttributeInitialized: true,
+									Name:                   "result",
+									Type:                   "String",
+									Value:                  "10 or less",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	expected := `
+	public class Testif {
+		// default constructor 
+		public Testif() {
+		} 
+		// constructor with all arguments 
+		public Testif() {
+		} 
+		
+		public String checkValue(int input) { 
+			String result;
+			if(input > 10) {
+				String result = "Greater than 10";
+			} 
+			else { 
+				String result = "10 or less";
+			} 
+			return result;
+			} 
+		}
+`
 
 	output, err := renderTemplate(PATHCLASS, class)
 	if err != nil {
