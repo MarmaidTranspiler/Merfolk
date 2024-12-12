@@ -236,28 +236,25 @@ func TransformSequenceDiagram(
 
 	// A small structure to handle alt/else/end logic:
 	type conditionalContext struct {
-		// True if we're currently building an if block
-		active bool
-		// Condition for the if block (from the first alt line)
+		active      bool
 		ifCondition string
-		// IfBody: holds instructions inside the 'if' portion
-		ifBody []generator.Body
-		// ElseBody: holds instructions inside the 'else' portion (if any)
-		elseBody []generator.Body
-		// Track whether we've seen an else block yet
-		seenElse bool
+		ifBody      []generator.Body
+		elseBody    []generator.Body
+		seenElse    bool
+
+		// Store original context
+		origClass  *generator.Class
+		origMethod *generator.Method
 	}
 
 	var currentConditional conditionalContext
 
 	// Helper to flush conditional context into the current method
 	finalizeConditionalBlock := func(m *generator.Method) {
-		fmt.Println("in finalise this is method:", m.Name)
-
 		if !currentConditional.active {
 			return
 		}
-		// Create a single Body with IsCondition = true
+
 		condBody := generator.Body{
 			IsCondition: true,
 			Condition:   currentConditional.ifCondition,
@@ -266,7 +263,9 @@ func TransformSequenceDiagram(
 		if currentConditional.seenElse {
 			condBody.ElseBody = currentConditional.elseBody
 		}
+
 		m.MethodBody = append(m.MethodBody, condBody)
+
 		// Reset the conditional context
 		currentConditional = conditionalContext{}
 	}
@@ -333,41 +332,51 @@ func TransformSequenceDiagram(
 		// Handle Alt (if/else) blocks ALTBLOCK
 		if instruction.Alt != nil {
 			alt := instruction.Alt
-			class, m := getCurrentContext()
-			fmt.Println("ALT this is class:", class.ClassName)
+			currClass, currMethod := getCurrentContext()
 
-			fmt.Println("ALT this is method:", m.Name)
-
-			if m == nil {
-				fmt.Println("Warning: alt encountered outside of any method context. Ignoring.")
+			if currMethod == nil {
+				fmt.Println("Warning: 'alt' encountered outside of any method context. Ignoring.")
 				continue
 			}
 
 			if !currentConditional.active {
 				// Start a new if block
 				startIfBlock(alt.Definition)
+				// Store original context
+				currentConditional.origClass = currClass
+				currentConditional.origMethod = currMethod
 			} else {
 				// If block is active, this is either else block
 				if !currentConditional.seenElse {
-					// Start else block
 					startElseBlock(alt.Definition)
 				} else {
-					// We've already got an else block.
-					// For simplicity, ignore additional alt lines or treat them as no-ops
 					fmt.Println("Warning: Multiple else blocks not supported. Ignoring extra alt.")
 				}
 			}
 
 			continue
 		}
+		if instruction.Else != nil {
+			// Must be inside an active conditional
+			if !currentConditional.active {
+				fmt.Println("Warning: 'else' encountered without an active 'alt' block. Ignoring.")
+				continue
+			}
+			if currentConditional.seenElse {
+				fmt.Println("Warning: Multiple 'else' blocks encountered. Ignoring extra 'else'.")
+				continue
+			}
+
+			// Switch to else block
+			currentConditional.seenElse = true
+			continue
+		}
 
 		if instruction.End != nil {
-			// End of alt/if block
-			_, m := getCurrentContext()
-			fmt.Println("END this is class:", m.Name)
-
-			if currentConditional.active {
-				finalizeConditionalBlock(m)
+			if currentConditional.active && currentConditional.origMethod != nil {
+				finalizeConditionalBlock(currentConditional.origMethod)
+			} else {
+				fmt.Println("Warning: 'end' encountered without an active 'alt' block or method context.")
 			}
 			continue
 		}
