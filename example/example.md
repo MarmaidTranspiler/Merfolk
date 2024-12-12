@@ -19,7 +19,7 @@ classDiagram
 
 ```
 
-
+Fuer jedes ->> muss es ein -->> geben sonst haut der stack nicht hin
 ```mermaid
 sequenceDiagram
    actor user
