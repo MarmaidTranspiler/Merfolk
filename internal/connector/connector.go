@@ -146,8 +146,6 @@ func TransformSequenceDiagram(
 	}
 	var callStack []methodContext
 
-	// callReturnStack holds references to the caller and line index for each method call
-	// Each entry: (callerClass, callerMethod, callLineIndex)
 	type callReturnInfo struct {
 		callerClass  *generator.Class
 		callerMethod *generator.Method
@@ -220,8 +218,104 @@ func TransformSequenceDiagram(
 		return localVarName
 	}
 
-	for _, instruction := range sequenceDiagram.Instructions {
+	findClass := func(classes map[string]*generator.Class, className string) *generator.Class {
+		if class, exists := classes[className]; exists {
+			return class
+		}
+		return nil
+	}
 
+	findMethod := func(class *generator.Class, methodName string) *generator.Method {
+		for i, method := range class.Methods {
+			if method.Name == methodName {
+				return &class.Methods[i]
+			}
+		}
+		return nil
+	}
+
+	// A small structure to handle alt/else/end logic:
+	type conditionalContext struct {
+		// True if we're currently building an if block
+		active bool
+		// Condition for the if block (from the first alt line)
+		ifCondition string
+		// IfBody: holds instructions inside the 'if' portion
+		ifBody []generator.Body
+		// ElseBody: holds instructions inside the 'else' portion (if any)
+		elseBody []generator.Body
+		// Track whether we've seen an else block yet
+		seenElse bool
+	}
+
+	var currentConditional conditionalContext
+
+	// Helper to flush conditional context into the current method
+	finalizeConditionalBlock := func(m *generator.Method) {
+		fmt.Println("in finalise this is method:", m.Name)
+
+		if !currentConditional.active {
+			return
+		}
+		// Create a single Body with IsCondition = true
+		condBody := generator.Body{
+			IsCondition: true,
+			Condition:   currentConditional.ifCondition,
+			IfBody:      currentConditional.ifBody,
+		}
+		if currentConditional.seenElse {
+			condBody.ElseBody = currentConditional.elseBody
+		}
+		m.MethodBody = append(m.MethodBody, condBody)
+		// Reset the conditional context
+		currentConditional = conditionalContext{}
+	}
+
+	// Add a helper to start if block from Alt definition
+	startIfBlock := func(definition []string) {
+		currentConditional.active = true
+		condition := strings.Join(definition, " ")
+		// If the line is just 'else', we treat it as else with no condition
+		// but since it's the first block, that wouldn't make sense, so let's assume first alt is always condition
+		currentConditional.ifCondition = condition
+	}
+
+	// Switch to else block when we encounter a second alt line inside an if block
+	startElseBlock := func(definition []string) {
+		// If definition includes "else" keyword or no suitable condition, treat as else
+		condition := strings.Join(definition, " ")
+		// For simplicity, any second alt line is treated as else block if "else" is present
+		if strings.Contains(condition, "else") {
+			currentConditional.seenElse = true
+			// Now we store subsequent instructions into elseBody
+		} else {
+			// If no 'else' keyword, treat it as else anyway for simplicity
+			currentConditional.seenElse = true
+		}
+	}
+
+	// A helper to add a body line either to method or conditional context
+	addInstructionToCurrentContext := func(b generator.Body) {
+		_, m := getCurrentContext()
+		if m == nil {
+			// No method context, ignore or print warning
+			fmt.Println("Warning: Instruction outside of method context, skipping line.")
+			return
+		}
+
+		if currentConditional.active {
+			if currentConditional.seenElse {
+				currentConditional.elseBody = append(currentConditional.elseBody, b)
+			} else {
+				currentConditional.ifBody = append(currentConditional.ifBody, b)
+			}
+		} else {
+			m.MethodBody = append(m.MethodBody, b)
+		}
+	}
+
+	// Main loop
+	for _, instruction := range sequenceDiagram.Instructions {
 		if instruction.Member != nil {
 			member := instruction.Member
 			if member.Type == "participant" || member.Type == "actor" {
@@ -236,18 +330,69 @@ func TransformSequenceDiagram(
 			}
 		}
 
+		// Handle Alt (if/else) blocks ALTBLOCK
+		if instruction.Alt != nil {
+			alt := instruction.Alt
+			class, m := getCurrentContext()
+			fmt.Println("ALT this is class:", class.ClassName)
+
+			fmt.Println("ALT this is method:", m.Name)
+
+			if m == nil {
+				fmt.Println("Warning: alt encountered outside of any method context. Ignoring.")
+				continue
+			}
+
+			if !currentConditional.active {
+				// Start a new if block
+				startIfBlock(alt.Definition)
+			} else {
+				// If block is active, this is either else block
+				if !currentConditional.seenElse {
+					// Start else block
+					startElseBlock(alt.Definition)
+				} else {
+					// We've already got an else block.
+					// For simplicity, ignore additional alt lines or treat them as no-ops
+					fmt.Println("Warning: Multiple else blocks not supported. Ignoring extra alt.")
+				}
+			}
+
+			continue
+		}
+
+		if instruction.End != nil {
+			// End of alt/if block
+			_, m := getCurrentContext()
+			fmt.Println("END this is class:", m.Name)
+
+			if currentConditional.active {
+				finalizeConditionalBlock(m)
+			}
+			continue
+		}
+
+		if instruction.Loop != nil {
+			// For now, loops are not implemented, just a placeholder
+			// You could implement loop logic similarly to alt/else if needed.
+			continue
+		}
+
+		if instruction.Switch != nil {
+			// For now, switch (activate/deactivate) are not implemented
+			// Just ignore or handle similarly if needed.
+			continue
+		}
+
 		if instruction.Message != nil {
 			message := instruction.Message
 			switch message.Type {
 			case "->>":
 				// Caller calls Callee
-				//caller := message.Left
-				callee := message.Right
-				methodName := message.Name
-				_, calleeIsParticipant := participants[callee]
-
 				cClass, cMethod := getCurrentContext()
 
+				callee := message.Right
+				_, calleeIsParticipant := participants[callee]
 				if cMethod == nil {
 					// First call sets initial context
 					methodClass := findClass(classes, callee)
@@ -257,11 +402,11 @@ func TransformSequenceDiagram(
 						methodClass = findOrCreateDummyClass(callee)
 					}
 
-					methodObj := findMethod(methodClass, methodName)
+					methodObj := findMethod(methodClass, message.Name)
 					if methodObj == nil {
 						newMethod := generator.Method{
 							AccessModifier: "public",
-							Name:           methodName,
+							Name:           message.Name,
 							ReturnType:     "void",
 							Parameters:     []generator.Attribute{},
 							MethodBody:     []generator.Body{},
@@ -270,7 +415,6 @@ func TransformSequenceDiagram(
 						methodObj = &methodClass.Methods[len(methodClass.Methods)-1]
 					}
 					pushContext(methodClass, methodObj)
-					// No caller here yet (top-level call), so no line is added.
 				} else {
 					// Add the call line to the current (caller) method
 					callerClass, callerMethod := cClass, cMethod
@@ -282,11 +426,11 @@ func TransformSequenceDiagram(
 						calleeClass = findOrCreateDummyClass(callee)
 					}
 
-					calleeMethod := findMethod(calleeClass, methodName)
+					calleeMethod := findMethod(calleeClass, message.Name)
 					if calleeMethod == nil {
 						newMethod := generator.Method{
 							AccessModifier: "public",
-							Name:           methodName,
+							Name:           message.Name,
 							ReturnType:     "void",
 							Parameters:     []generator.Attribute{},
 							MethodBody:     []generator.Body{},
@@ -295,7 +439,6 @@ func TransformSequenceDiagram(
 						calleeMethod = &calleeClass.Methods[len(calleeClass.Methods)-1]
 					}
 
-					// Determine call params
 					callParams := []generator.Attribute{}
 					for i, p := range message.Parameters {
 						typ := "String"
@@ -319,31 +462,33 @@ func TransformSequenceDiagram(
 					if calleeMethod.Name == calleeClass.ClassName {
 						callBody = generator.Body{
 							IsObjectCreation:  true,
-							ObjectName:        strings.ToLower(methodName),
+							ObjectName:        strings.ToLower(message.Name),
 							ObjectType:        calleeClass.ClassName,
 							IsVariable:        isVariable,
 							ObjFuncParameters: callParams,
-							FunctionName:      objectRef + "." + methodName,
+							FunctionName:      objectRef + "." + message.Name,
 						}
 					} else {
 						callBody = generator.Body{
 							IsVariable:        isVariable,
 							ObjFuncParameters: callParams,
-							FunctionName:      objectRef + "." + methodName,
+							FunctionName:      objectRef + "." + message.Name,
 						}
 					}
 
 					if isVariable {
 						callBody.Variable = generator.Attribute{
-							Name: "temp" + capitalize(methodName),
+							Name: "temp" + capitalize(message.Name),
 							Type: returnType,
 						}
 					}
 
-					callerMethod.MethodBody = append(callerMethod.MethodBody, callBody)
-					callLineIndex := len(callerMethod.MethodBody) - 1
+					addInstructionToCurrentContext(callBody)
+					callLineIndex := -1
+					if cMethod != nil {
+						callLineIndex = len(cMethod.MethodBody) - 1
+					}
 
-					// Store call info for later renaming
 					callReturnStack = append(callReturnStack, callReturnInfo{
 						callerClass:  callerClass,
 						callerMethod: callerMethod,
@@ -353,7 +498,6 @@ func TransformSequenceDiagram(
 					lastObjectIsConstructor = false
 					lastObjectTempVarName = ""
 
-					// Now push callee context
 					pushContext(calleeClass, calleeMethod)
 				}
 
@@ -366,7 +510,6 @@ func TransformSequenceDiagram(
 				}
 
 				if lastObjectIsConstructor {
-					// If the last object was created during the constructor, rename it
 					for i, body := range currentMethod.MethodBody {
 						if body.IsObjectCreation && body.ObjectName == lastObjectTempVarName {
 							currentMethod.MethodBody[i].ObjectName = message.Name
@@ -376,10 +519,8 @@ func TransformSequenceDiagram(
 					lastObjectIsConstructor = false
 					lastObjectTempVarName = ""
 				} else {
-					// Rename the variable in the caller method and set it as the return value
 					if len(callReturnStack) == 0 {
 						fmt.Printf("No previous method call to assign return value: %s. Could not rename.\n", message.Name)
-						// No call stack entry means we can't assign return value to a previous call.
 					} else {
 						lastCall := callReturnStack[len(callReturnStack)-1]
 						callReturnStack = callReturnStack[:len(callReturnStack)-1]
@@ -388,17 +529,14 @@ func TransformSequenceDiagram(
 						if lastCall.lineIndex >= 0 && lastCall.lineIndex < len(callerMethod.MethodBody) {
 							callLine := &callerMethod.MethodBody[lastCall.lineIndex]
 							callLine.IsVariable = true
-							// Rename to the returned name
 							if callLine.Variable.Name == "" {
 								callLine.Variable = generator.Attribute{
 									Name: message.Name,
-									Type: "String", // If you know the return type, adjust this accordingly
+									Type: "String",
 								}
 							} else {
 								callLine.Variable.Name = message.Name
 							}
-
-							// Set the caller method to return the newly named variable instead of the default placeholder
 							callerMethod.ReturnValue = message.Name
 						} else {
 							fmt.Printf("Couldn't assign return value name for method. Index out of range.\n")
@@ -411,98 +549,17 @@ func TransformSequenceDiagram(
 		}
 	}
 
-	// After processing the entire sequence diagram, fix return values for methods without return variables.
-	for _, cls := range classes {
-		for m := range cls.Methods {
-			method := &cls.Methods[m]
-			if method.ReturnType == "" || method.ReturnType == "void" {
-				continue
-			}
+	// If there's any open conditional block at the end (no 'end' found)
+	// finalize it anyway.
+	class, finalMethod := getCurrentContext()
+	fmt.Println("this is class:", class.ClassName)
+	fmt.Println("this is method:", finalMethod.Name)
 
-			// Check if there's a ReturnValue
-			if method.ReturnValue == "" {
-				continue // If no return value is set, skip
-			}
-
-			returnVar := method.ReturnValue
-			returnType := method.ReturnType
-			var existingVar *generator.Attribute
-			var conflictingVar bool
-
-			// Check for variable declarations or creations in the method body
-			for _, bodyLine := range method.MethodBody {
-				if bodyLine.IsObjectCreation && bodyLine.ObjectName == returnVar {
-					if bodyLine.ObjectType == returnType {
-						existingVar = &generator.Attribute{
-							Name: returnVar,
-							Type: returnType,
-						}
-					} else {
-						conflictingVar = true
-					}
-					break
-				}
-				if bodyLine.IsDeclaration && bodyLine.Variable.Name == returnVar {
-					if bodyLine.Variable.Type == returnType {
-						existingVar = &bodyLine.Variable
-					} else {
-						conflictingVar = true
-					}
-					break
-				}
-			}
-
-			// Handle conflicts or missing declarations
-			if conflictingVar {
-				// Create a new variable with a unique name
-				uniqueVarName := returnVar + "Result"
-				if isPrimitiveType(returnType) {
-					// For primitives and String, declare and initialize with default value
-					declBody := generator.Body{
-						IsDeclaration: true,
-						Variable: generator.Attribute{
-							Name:  uniqueVarName,
-							Type:  returnType,
-							Value: defaultZero(returnType),
-						},
-					}
-					method.MethodBody = append([]generator.Body{declBody}, method.MethodBody...)
-				} else {
-					// Non-primitive: create a new object
-					creationBody := generator.Body{
-						IsObjectCreation: true,
-						ObjectName:       uniqueVarName,
-						ObjectType:       returnType,
-					}
-					method.MethodBody = append([]generator.Body{creationBody}, method.MethodBody...)
-				}
-				// Update the method to return the unique variable
-				method.ReturnValue = uniqueVarName
-			} else if existingVar == nil {
-				// No variable exists, create a new one
-				if isPrimitiveType(returnType) {
-					// For primitives and String, declare and initialize with default value
-					declBody := generator.Body{
-						IsDeclaration: true,
-						Variable: generator.Attribute{
-							Name:  returnVar,
-							Type:  returnType,
-							Value: defaultZero(returnType),
-						},
-					}
-					method.MethodBody = append([]generator.Body{declBody}, method.MethodBody...)
-				} else {
-					// Non-primitive: create a new object
-					creationBody := generator.Body{
-						IsObjectCreation: true,
-						ObjectName:       returnVar,
-						ObjectType:       returnType,
-					}
-					method.MethodBody = append([]generator.Body{creationBody}, method.MethodBody...)
-				}
-			}
-		}
+	if currentConditional.active {
+		finalizeConditionalBlock(finalMethod)
 	}
+
+	// After processing the entire sequence diagram, fix return values for methods
 	finalizeVariableDeclarations(classes)
 
 	fmt.Println("TransformSequenceDiagram: completed transformation")
