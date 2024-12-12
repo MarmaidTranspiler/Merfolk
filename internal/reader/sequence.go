@@ -13,6 +13,7 @@ type SequenceInstruction struct {
 	Message *Message        `  @@`
 	Loop    *Loop           `| @@`
 	Alt     *Alt            `| @@`
+	Else    *Else           `| @@`
 	End     *End            `| @@`
 	Member  *SequenceMember `| @@`
 	Life    *Life           `| @@`
@@ -25,7 +26,7 @@ type Message struct {
 	Right       string   `@Word ":"`
 	Name        string   `@Word Break*`
 	DefaultCall bool     `@( "(" ")" )? Break*`
-	Parameters  []string `( "(" (@Word | @String) ( "," (@Word | @String) )* ")" )? Break*`
+	Parameters  []string `( "(" (@Word | @Null | @String) ( "," (@Word | @String) )* ")" )? Break*`
 }
 
 type Loop struct {
@@ -34,6 +35,10 @@ type Loop struct {
 
 type Alt struct {
 	Definition []string `"alt" @Word+ Break+`
+}
+
+type Else struct {
+	Type string `"else" Break*`
 }
 
 type End struct {
