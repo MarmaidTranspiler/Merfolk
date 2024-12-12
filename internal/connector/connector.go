@@ -193,9 +193,6 @@ func TransformSequenceDiagram(
 
 	participants := make(map[string]bool)
 
-	var lastObjectIsConstructor bool
-	var lastObjectTempVarName string
-
 	// Conditional context for alt/if/else blocks
 	type conditionalContext struct {
 		active      bool
@@ -360,6 +357,7 @@ func TransformSequenceDiagram(
 			} else {
 				// If block already active, this becomes an else block
 				if !currentConditional.seenElse {
+
 					startElseBlock(alt.Definition)
 				} else {
 					fmt.Println("Warning: Multiple else blocks not supported. Ignoring extra alt.")
@@ -401,6 +399,7 @@ func TransformSequenceDiagram(
 			switch message.Type {
 			case "->>":
 				// Caller calls Callee
+				callLineIndex := -1
 				cClass, cMethod := getCurrentContext()
 
 				calleeName := message.Right
@@ -427,6 +426,14 @@ func TransformSequenceDiagram(
 						calleeClass.Methods = append(calleeClass.Methods, newMethod)
 						calleeMethod = &calleeClass.Methods[len(calleeClass.Methods)-1]
 					}
+
+					callReturnStack = append(callReturnStack, callReturnInfo{
+						callerClass:  calleeClass,
+						callerMethod: calleeMethod,
+						lineIndex:    callLineIndex,
+					})
+					//fmt.Println("push ", callReturnStack[len(callReturnStack)-1].callerClass.ClassName, " ", callReturnStack[len(callReturnStack)-1].callerMethod.Name, " ", message.Name)
+
 					pushContext(calleeClass, calleeMethod)
 				} else {
 					// Normal call from caller to callee
@@ -461,8 +468,12 @@ func TransformSequenceDiagram(
 						callParams = append(callParams, generator.Attribute{Name: p, Type: typ})
 					}
 
+					//fmt.Println(callerMethod.Name, "   ", callerMethod.ReturnType)
+
 					returnType := calleeMethod.ReturnType
-					isVariable := (returnType != "" && returnType != "void")
+					isVariable := returnType != "" && returnType != "void"
+					isConstructor := calleeMethod.Name == calleeClass.ClassName
+					fmt.Println(message.Name, returnType, isVariable, isConstructor)
 
 					objectRef := ensureObjectReference(callerMethod, callerClass, calleeClass.ClassName)
 
@@ -494,62 +505,69 @@ func TransformSequenceDiagram(
 					}
 
 					addInstructionToCurrentContext(callBody)
-					callLineIndex := -1
+
 					if cMethod != nil {
 						callLineIndex = len(cMethod.MethodBody) - 1
 					}
 
-					callReturnStack = append(callReturnStack, callReturnInfo{
-						callerClass:  callerClass,
-						callerMethod: callerMethod,
-						lineIndex:    callLineIndex,
-					})
-
-					lastObjectIsConstructor = false
-					lastObjectTempVarName = ""
-
 					pushContext(calleeClass, calleeMethod)
+					if !isVariable && !isConstructor {
+						popContext()
+					} else {
+						callReturnStack = append(callReturnStack, callReturnInfo{
+							callerClass:  callerClass,
+							callerMethod: callerMethod,
+							lineIndex:    callLineIndex,
+						})
+					}
+
 				}
 
 			case "-->>":
 				// Return from a method
-				_, currentMethod := getCurrentContext()
+				currentClass, currentMethod := getCurrentContext()
+				fmt.Println("-->")
+
 				if currentMethod == nil {
 					fmt.Println("No current function. Skipping return assignment.")
 					continue
-				}
-
-				if lastObjectIsConstructor {
-					for i, body := range currentMethod.MethodBody {
-						if body.IsObjectCreation && body.ObjectName == lastObjectTempVarName {
-							currentMethod.MethodBody[i].ObjectName = message.Name
-							break
-						}
-					}
-					lastObjectIsConstructor = false
-					lastObjectTempVarName = ""
 				} else {
+
 					if len(callReturnStack) == 0 {
+
 						fmt.Printf("No previous method call to assign return value: %s. Could not rename.\n", message.Name)
 					} else {
+						//fmt.Println("pop  ", callReturnStack[len(callReturnStack)-1].callerClass.ClassName, " ", callReturnStack[len(callReturnStack)-1].callerMethod.Name, " ", message.Name)
+
 						lastCall := callReturnStack[len(callReturnStack)-1]
 						callReturnStack = callReturnStack[:len(callReturnStack)-1]
 
 						callerMethod := lastCall.callerMethod
+						callerClass := lastCall.callerClass
+						fmt.Println("-->", message.Right, callerClass.ClassName, callerMethod.Name)  // in dieser funktion wird gearbeitet
+						fmt.Println("-->", message.Left, currentClass.ClassName, currentMethod.Name) // das passiert gerade in dieser funktion
+
 						if lastCall.lineIndex >= 0 && lastCall.lineIndex < len(callerMethod.MethodBody) {
 							callLine := &callerMethod.MethodBody[lastCall.lineIndex]
+
 							callLine.IsVariable = true
+
 							if callLine.Variable.Name == "" {
 								callLine.Variable = generator.Attribute{
 									Name: message.Name,
 									Type: "String",
 								}
+								//popContext()
 							} else {
+
 								callLine.Variable.Name = message.Name
+								//popContext()
 							}
-							callerMethod.ReturnValue = message.Name
+
+							//todo return type needs to be handled differently
+							currentMethod.ReturnValue = message.Name
 						} else {
-							fmt.Printf("Couldn't assign return value name for method. Index out of range.\n")
+							fmt.Println("Couldn't assign return value name for method. Index out of range.", callerMethod.Name, callerMethod.ReturnValue, currentMethod.Name)
 						}
 					}
 				}
@@ -567,6 +585,13 @@ func TransformSequenceDiagram(
 
 	// After processing the entire sequence diagram, fix variable declarations
 	finalizeVariableDeclarations(classes)
+
+	if len(callStack) > 0 {
+		fmt.Printf("Warning: Stack not empty after processing. Remaining size: %d\n", len(callStack))
+		for _, ctx := range callStack {
+			fmt.Printf("Unfinished context: class=%s, method=%s\n", ctx.class.ClassName, ctx.method.Name)
+		}
+	}
 
 	fmt.Println("TransformSequenceDiagram: completed transformation")
 	return nil
