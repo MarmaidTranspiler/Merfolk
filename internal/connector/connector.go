@@ -399,7 +399,7 @@ func TransformSequenceDiagram(
 			switch message.Type {
 			case "->>":
 				// Caller calls Callee
-				callLineIndex := -1
+				callLineIndex := 0
 				cClass, cMethod := getCurrentContext()
 
 				calleeName := message.Right
@@ -432,7 +432,6 @@ func TransformSequenceDiagram(
 						callerMethod: calleeMethod,
 						lineIndex:    callLineIndex,
 					})
-					//fmt.Println("push ", callReturnStack[len(callReturnStack)-1].callerClass.ClassName, " ", callReturnStack[len(callReturnStack)-1].callerMethod.Name, " ", message.Name)
 
 					pushContext(calleeClass, calleeMethod)
 				} else {
@@ -473,7 +472,7 @@ func TransformSequenceDiagram(
 					returnType := calleeMethod.ReturnType
 					isVariable := returnType != "" && returnType != "void"
 					isConstructor := calleeMethod.Name == calleeClass.ClassName
-					fmt.Println(message.Name, returnType, isVariable, isConstructor)
+					// fmt.Println(message.Name, returnType, isVariable, isConstructor)
 
 					objectRef := ensureObjectReference(callerMethod, callerClass, calleeClass.ClassName)
 
@@ -506,11 +505,10 @@ func TransformSequenceDiagram(
 
 					addInstructionToCurrentContext(callBody)
 
-					if cMethod != nil {
-						callLineIndex = len(cMethod.MethodBody) - 1
-					}
+					callLineIndex = len(cMethod.MethodBody) - 1
 
 					pushContext(calleeClass, calleeMethod)
+
 					if !isVariable && !isConstructor {
 						popContext()
 					} else {
@@ -526,7 +524,6 @@ func TransformSequenceDiagram(
 			case "-->>":
 				// Return from a method
 				currentClass, currentMethod := getCurrentContext()
-				fmt.Println("-->")
 
 				if currentMethod == nil {
 					fmt.Println("No current function. Skipping return assignment.")
@@ -537,15 +534,11 @@ func TransformSequenceDiagram(
 
 						fmt.Printf("No previous method call to assign return value: %s. Could not rename.\n", message.Name)
 					} else {
-						//fmt.Println("pop  ", callReturnStack[len(callReturnStack)-1].callerClass.ClassName, " ", callReturnStack[len(callReturnStack)-1].callerMethod.Name, " ", message.Name)
 
 						lastCall := callReturnStack[len(callReturnStack)-1]
 						callReturnStack = callReturnStack[:len(callReturnStack)-1]
 
 						callerMethod := lastCall.callerMethod
-						callerClass := lastCall.callerClass
-						fmt.Println("-->", message.Right, callerClass.ClassName, callerMethod.Name)  // in dieser funktion wird gearbeitet
-						fmt.Println("-->", message.Left, currentClass.ClassName, currentMethod.Name) // das passiert gerade in dieser funktion
 
 						if lastCall.lineIndex >= 0 && lastCall.lineIndex < len(callerMethod.MethodBody) {
 							callLine := &callerMethod.MethodBody[lastCall.lineIndex]
@@ -566,9 +559,7 @@ func TransformSequenceDiagram(
 
 							currentMethod.ReturnValue = message.Name
 						} else {
-							//thismethod := findMethod(currentClass, currentMethod.Name)
-							//todo irgendein check sodass es nicht muell macht
-							callerMethod.ReturnValue = message.Name
+							//callerMethod.ReturnValue = message.Name
 
 							fmt.Println("Couldn't assign return value name for method. Index out of range.", callerMethod.Name, callerMethod.ReturnValue, currentMethod.Name, currentClass)
 						}
