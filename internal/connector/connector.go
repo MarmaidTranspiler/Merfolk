@@ -564,10 +564,13 @@ func TransformSequenceDiagram(
 								//popContext()
 							}
 
-							//todo return type needs to be handled differently
 							currentMethod.ReturnValue = message.Name
 						} else {
-							fmt.Println("Couldn't assign return value name for method. Index out of range.", callerMethod.Name, callerMethod.ReturnValue, currentMethod.Name)
+							//thismethod := findMethod(currentClass, currentMethod.Name)
+							//todo irgendein check sodass es nicht muell macht
+							callerMethod.ReturnValue = message.Name
+
+							fmt.Println("Couldn't assign return value name for method. Index out of range.", callerMethod.Name, callerMethod.ReturnValue, currentMethod.Name, currentClass)
 						}
 					}
 				}
