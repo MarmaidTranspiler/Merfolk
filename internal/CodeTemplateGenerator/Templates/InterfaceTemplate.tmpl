@@ -1,9 +1,0 @@
-public interface {{.InterfaceName}} {{- if .Inherits}} extends {{ range $index, $interface := .Inherits}}{{if $index}}, {{end}}{{$interface}}{{- end}} {{- end}} {
-{{- range .AbstractAttributes }}
-    public {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{- end}};
-{{- end }}
-
-{{ range .AbstractMethods }}
-    public {{.ReturnType}} {{.Name}}();
-{{- end }}
-}
