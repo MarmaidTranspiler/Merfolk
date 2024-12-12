@@ -77,8 +77,8 @@ func Convert(args []string) {
 				// Process class diagrams
 				classMap, interfaceMap, err := connector.TransformClassDiagram(
 					diagram.Class,
-					"internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl",     // No immediate output yet
-					"internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl", // No immediate output yet
+					"internal/CodeTemplateGenerator/ClassTemplate.tmpl",     // No immediate output yet
+					"internal/CodeTemplateGenerator/InterfaceTemplate.tmpl", // No immediate output yet
 					outputDir+"/",
 				)
 				if err != nil {
@@ -104,10 +104,10 @@ func Convert(args []string) {
 
 	// Process sequence diagrams and integrate with classes
 	for _, sequenceDiagram := range sequenceDiagrams {
-		/*classes, err = */ connector.TransformSequenceDiagram(
+		/*classes, err = */ err := connector.TransformSequenceDiagram(
 			sequenceDiagram,
 			classes, // Modify existing class definitions
-			"internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl", // No immediate output yet
+			"internal/CodeTemplateGenerator/ClassTemplate.tmpl", // No immediate output yet
 			outputDir+"/",
 		)
 		if err != nil {
@@ -118,8 +118,8 @@ func Convert(args []string) {
 	}
 
 	// Generate Java code for all classes and interfaces
-	classTemplatePath := "internal/CodeTemplateGenerator/Templates/ClassTemplate.tmpl"
-	interfaceTemplatePath := "internal/CodeTemplateGenerator/Templates/InterfaceTemplate.tmpl"
+	classTemplatePath := "internal/CodeTemplateGenerator/ClassTemplate.tmpl"
+	interfaceTemplatePath := "internal/CodeTemplateGenerator/InterfaceTemplate.tmpl"
 
 	for _, class := range classes {
 		err := generator.GenerateJavaCode(*class, outputDir+"/", class.ClassName, classTemplatePath)
