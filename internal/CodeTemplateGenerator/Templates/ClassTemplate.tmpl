@@ -87,16 +87,16 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{ .Variable.Type }} {{ .Variable.Name }} = {{ stringFormation .Variable.Type .Variable.Value }};
         {{- end }}
     {{- else if .IsCondition }}
-        if ({{ .Condition }}) {
-            {{- range .IfBody }}
-            {{- template "BodyTemplate" . }}
-            {{- end }}
+        if({{ .Condition }}) {
+        {{- range .IfBody }}
+        {{- template "BodyTemplate" . }}
+        {{- end }}
         }
         {{- if .ElseBody }}
         else {
-            {{- range .ElseBody }}
-            {{- template "BodyTemplate" . }}
-            {{- end }}
+        {{- range .ElseBody }}
+        {{- template "BodyTemplate" . }}
+        {{- end }}
         }
         {{- end }}
     {{- else }}
