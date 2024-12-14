@@ -6,11 +6,12 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
 
     // default constructor
     public {{.ClassName}}() {
-        {{- range .Attributes }}
-        {{- if and (not .IsClassVariable) (not .IsConstant)}}
-        this.{{.Name}} = {{if eq .Type "String"}}{{defaultZero .Type}}{{else}}new {{.Type}}(){{end}};
-        {{- end}}
-        {{- end }}
+    {{- range .Attributes }}
+    {{- if and (not .IsClassVariable) (not .IsConstant) (not .IsAttributeInitialized) }}
+        this.{{.Name}} = {{ if .IsObject }}{{- if eq .Type "String" }}{{defaultZero .Type}}{{- else if .ObjectConstructorArgs }}new {{.Type}}({{range $index, $arg := .ObjectConstructorArgs}}{{if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}}{{end}}){{- else }}new {{.Type}}(){{- end }}{{- else }}{{defaultZero .Type}}
+    {{- end }};
+    {{- end }}
+    {{- end }}
     }
 
     // constructor with all arguments
@@ -87,16 +88,16 @@ public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt 
         {{ .Variable.Type }} {{ .Variable.Name }} = {{ stringFormation .Variable.Type .Variable.Value }};
         {{- end }}
     {{- else if .IsCondition }}
-        if ({{ .Condition }}) {
-            {{- range .IfBody }}
-            {{- template "BodyTemplate" . }}
-            {{- end }}
+        if({{ .Condition }}) {
+        {{- range .IfBody }}
+        {{- template "BodyTemplate" . }}
+        {{- end }}
         }
         {{- if .ElseBody }}
         else {
-            {{- range .ElseBody }}
-            {{- template "BodyTemplate" . }}
-            {{- end }}
+        {{- range .ElseBody }}
+        {{- template "BodyTemplate" . }}
+        {{- end }}
         }
         {{- end }}
     {{- else }}
