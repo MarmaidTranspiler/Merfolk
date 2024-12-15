@@ -104,7 +104,7 @@ func Convert(args []string) {
 
 	// Process sequence diagrams and integrate with classes
 	for _, sequenceDiagram := range sequenceDiagrams {
-		/*classes, err = */ err := connector.TransformSequenceDiagram(
+		err := connector.TransformSequenceDiagram(
 			sequenceDiagram,
 			classes, // Modify existing class definitions
 			"internal/CodeTemplateGenerator/ClassTemplate.tmpl", // No immediate output yet

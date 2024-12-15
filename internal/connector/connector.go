@@ -95,14 +95,23 @@ func processClassDiagramAttribute(
 	className string,
 	isInterface bool,
 ) {
+	fmt.Println(isPrimitiveType(member.Attribute.Type), member.Attribute.Name)
+
 	attr := generator.Attribute{
 		AccessModifier:  parseVisibility(member.Visibility),
 		Name:            member.Attribute.Name,
 		Type:            member.Attribute.Type,
 		IsClassVariable: false,
 		IsConstant:      false,
-		Value:           fmt.Sprintf("new %s()", member.Attribute.Type),
+		IsObject:        !isPrimitiveType(member.Attribute.Type),
+		Value: func() string {
+			if isPrimitiveType(member.Attribute.Type) {
+				return defaultZero(member.Attribute.Type) // Replace with appropriate default
+			}
+			return fmt.Sprintf("new %s()", member.Attribute.Name)
+		}(),
 	}
+	fmt.Println(attr.Value.(string))
 
 	if isInterface {
 		interfaces[className].AbstractAttributes = append(interfaces[className].AbstractAttributes, attr)
@@ -136,7 +145,6 @@ func processClassDiagramOperation(
 			Name: param.Name,
 			Type: param.Type,
 		})
-
 		// If parameter type corresponds to an existing class, add a dependency attribute
 		if _, exists := classes[param.Type]; exists {
 
@@ -559,14 +567,12 @@ func TransformSequenceDiagram(
 									Type: "TEMP",
 								}
 							} else if message.Left == currentClass.ClassName {
-								//fmt.Println(callLine.Variable.Name, message.Name)
 
 								if findMethod(findClass(classes, message.Left), extractAfterLastDot(callLine.FunctionName)) != nil {
-									fmt.Println(callLine.Variable.Name, message.Name)
+									// fmt.Println(callLine.Variable.Name, message.Name)
+
 									callLine.Variable.Name = message.Name
 								}
-
-								//fmt.Println(callLine.Variable.Name, message.Name)
 
 							}
 
