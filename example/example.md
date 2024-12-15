@@ -36,7 +36,7 @@ sequenceDiagram
    alt valid
     DataService ->> Data : setContent(content)
    else
-    DataService ->> Data : setContent(<null>)
+    DataService ->> Data : setContent(null)
    end
    DataService -->> Application : userData
    Application -->> user : userData

@@ -32,7 +32,7 @@ func TransformClassDiagram(
 		}
 
 		className := instruction.Member.Class
-		isInterface := (instruction.Member.Operation == nil)
+		isInterface := instruction.Member.Operation == nil
 
 		// Ensure class or interface entry is created
 		if isInterface {
@@ -139,13 +139,20 @@ func processClassDiagramOperation(
 
 		// If parameter type corresponds to an existing class, add a dependency attribute
 		if _, exists := classes[param.Type]; exists {
+
 			classVar := generator.Attribute{
 				AccessModifier:  "private",
 				Name:            fmt.Sprintf("%sInstance", param.Type),
 				Type:            param.Type,
 				IsClassVariable: false,
 				IsConstant:      false,
-				Value:           fmt.Sprintf("new %s()", param.Type),
+				IsObject:        isPrimitiveType(param.Type),
+				Value: func() string {
+					if isPrimitiveType(param.Type) {
+						return defaultZero(param.Type) // Replace with appropriate default
+					}
+					return fmt.Sprintf("new %s()", param.Type)
+				}(),
 			}
 			classes[className].Attributes = append(classes[className].Attributes, classVar)
 			fmt.Printf("TransformClassDiagram: added class dependency attribute %sInstance to class %s\n", param.Type, className)
@@ -531,10 +538,8 @@ func TransformSequenceDiagram(
 				} else {
 
 					if len(callReturnStack) == 0 {
-
 						fmt.Printf("No previous method call to assign return value: %s. Could not rename.\n", message.Name)
 					} else {
-
 						lastCall := callReturnStack[len(callReturnStack)-1]
 						callReturnStack = callReturnStack[:len(callReturnStack)-1]
 
@@ -543,23 +548,30 @@ func TransformSequenceDiagram(
 						if lastCall.lineIndex >= 0 && lastCall.lineIndex < len(callerMethod.MethodBody) {
 							callLine := &callerMethod.MethodBody[lastCall.lineIndex]
 
-							callLine.IsVariable = true
+							//fmt.Println("find check", callLine.FunctionName, message.Left, findMethod(findClass(classes, message.Left), extractAfterLastDot(callLine.FunctionName)).Name)
+							//fmt.Println(callLine.Variable.Name, message.Name)
 
+							callLine.IsVariable = true
 							if callLine.Variable.Name == "" {
+
 								callLine.Variable = generator.Attribute{
 									Name: message.Name,
-									Type: "String",
+									Type: "TEMP",
 								}
-								//popContext()
-							} else {
+							} else if message.Left == currentClass.ClassName {
+								//fmt.Println(callLine.Variable.Name, message.Name)
 
-								callLine.Variable.Name = message.Name
-								//popContext()
+								if findMethod(findClass(classes, message.Left), extractAfterLastDot(callLine.FunctionName)) != nil {
+									fmt.Println(callLine.Variable.Name, message.Name)
+									callLine.Variable.Name = message.Name
+								}
+
+								//fmt.Println(callLine.Variable.Name, message.Name)
+
 							}
 
 							currentMethod.ReturnValue = message.Name
 						} else {
-							//callerMethod.ReturnValue = message.Name
 
 							fmt.Println("Couldn't assign return value name for method. Index out of range.", callerMethod.Name, callerMethod.ReturnValue, currentMethod.Name, currentClass)
 						}
@@ -773,13 +785,20 @@ func buildObjectCreationString(varType string, params []generator.Attribute) str
 	return sb.String()
 }
 
+func extractAfterLastDot(input string) string {
+	if idx := strings.LastIndex(input, "."); idx != -1 {
+		return input[idx+1:] // Return substring after the last dot
+	}
+	return input // If no dot, return the original string
+}
+
 // convertToReassignment modifies a body line to represent a reassignment instead of a declaration
 func convertToReassignment(bodyLine generator.Body, finalName, assignmentExpr string) generator.Body {
 	bodyLine.IsDeclaration = false
 	bodyLine.IsObjectCreation = false
 	bodyLine.IsVariable = false
-	bodyLine.Variable = generator.Attribute{}
-	bodyLine.ObjFuncParameters = []generator.Attribute{}
+	//bodyLine.Variable = generator.Attribute{}
+	//bodyLine.ObjFuncParameters = []generator.Attribute{}
 	bodyLine.FunctionName = fmt.Sprintf("%s = %s", finalName, assignmentExpr)
 	return bodyLine
 }
@@ -808,7 +827,7 @@ func isPrimitiveType(typeName string) bool {
 	return primitiveTypes[typeName]
 }
 
-func defaultZero(typeName string) any {
+func defaultZero(typeName string) string {
 	switch typeName {
 	case "int":
 		return "0"
@@ -816,8 +835,10 @@ func defaultZero(typeName string) any {
 		return "false"
 	case "double", "float":
 		return "0.0"
+	case "String":
+		return "\"\""
 	default:
-		return nil // Objects don't have default values; they are initialized with `new`
+		return "null"
 	}
 }
 
