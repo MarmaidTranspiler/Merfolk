@@ -20,8 +20,6 @@ func TemplateGeneratorUtility() template.FuncMap {
 				return "false"
 			case "double", "float":
 				return "0.0"
-			case "String":
-				return "\"\""
 			default:
 				//Default value for object types
 				return "null"
