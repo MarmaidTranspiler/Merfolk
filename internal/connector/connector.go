@@ -569,8 +569,6 @@ func TransformSequenceDiagram(
 							} else if message.Left == currentClass.ClassName {
 
 								if findMethod(findClass(classes, message.Left), extractAfterLastDot(callLine.FunctionName)) != nil {
-									// fmt.Println(callLine.Variable.Name, message.Name)
-
 									callLine.Variable.Name = message.Name
 								}
 
@@ -841,8 +839,6 @@ func defaultZero(typeName string) string {
 		return "false"
 	case "double", "float":
 		return "0.0"
-	case "String":
-		return "\"\""
 	default:
 		return "null"
 	}
