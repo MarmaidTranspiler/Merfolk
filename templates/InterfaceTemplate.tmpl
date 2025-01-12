@@ -1,0 +1,13 @@
+public interface {{.InterfaceName}}{{if .Inherits}} extends {{range $index, $iface := .Inherits}}{{if $index}}, {{end}}{{$iface}}{{end}}{{end}} {
+    {{- range .AbstractAttributes }}
+    {{.AccessModifier}} {{.Type}} {{.Name}}{{if .Value}} = {{stringFormation .Type .Value}}{{end}};
+    {{- end }}
+
+    {{- range .AbstractMethods }}
+    {{.AccessModifier}} {{.Type}} {{.Name}}(
+        {{- range $index, $param := .Parameters }}
+        {{if $index}}, {{end}}{{.Type}} {{.Name}}
+        {{- end }}
+    );
+    {{- end }}
+}

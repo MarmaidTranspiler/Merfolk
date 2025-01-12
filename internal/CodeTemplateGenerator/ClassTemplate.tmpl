@@ -1,0 +1,106 @@
+public class {{.ClassName}}{{if .Inherits}} extends {{.Inherits}}{{end}}{{if gt (len .Abstraction) 0}} implements {{ range $index, $item := .Abstraction}}{{if $index}}, {{end}}{{$item}}{{- end}}{{end}} {
+    {{- range .Attributes }}
+    {{ $attribute := . }}
+    {{.AccessModifier}}{{if .IsClassVariable}} static{{end}}{{if .IsConstant}} final{{end}} {{.Type}} {{.Name}} {{- if .IsAttributeInitialized}} = {{- if .IsObject }} new {{.Type}}( {{- range $index, $arg := .ObjectConstructorArgs}} {{- if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}} {{- end}} ) {{- else}} {{stringFormation .Type .Value}}{{- end}}{{- end }};
+    {{- end }}
+
+    // default constructor
+    public {{.ClassName}}() {
+    {{- range .Attributes }}
+    {{- if and (not .IsClassVariable) (not .IsConstant) (not .IsAttributeInitialized) }}
+        this.{{.Name}} = {{ if .IsObject }}{{- if eq .Type "String" }}{{defaultZero .Type}}{{- else if .ObjectConstructorArgs }}new {{.Type}}({{range $index, $arg := .ObjectConstructorArgs}}{{if $index}}, {{end}}{{stringFormation $arg.Type $arg.Value}}{{end}}){{- else }}new {{.Type}}(){{- end }}{{- else }}{{defaultZero .Type}}
+    {{- end }};
+    {{- end }}
+    {{- end }}
+    }
+
+    // constructor with all arguments
+    public {{.ClassName}}(
+    {{- range $index, $field := .Attributes }}
+        {{- if and (not $field.IsClassVariable) (not $field.IsConstant) }}{{- if $index }}, {{ end }}{{$field.Type}} {{$field.Name}} {{- end }}{{- end }}) {
+        {{- range .Attributes }}
+        {{- if and (not .IsClassVariable) (not .IsConstant) }}
+        this.{{.Name}} = {{.Name}};
+        {{- end}}
+        {{- end }}
+    }
+
+    {{- range .Attributes }}
+    {{- if and (ne .AccessModifier "public") (not .IsClassVariable) (not .IsConstant) }}
+    // Getter {{.Name}}
+    public {{.Type}} get{{title .Name}}() {
+        return {{.Name}};
+    }
+    // Setter {{.Name}}
+    public void set{{title .Name}}({{.Type}} {{.Name}}) {
+        this.{{.Name}} = {{.Name}};
+    }
+    {{end}}
+    {{- end }}
+
+{{- range .Methods }}
+    {{.AccessModifier}} {{if .IsStatic}}static {{end}}{{.ReturnType}} {{.Name}}({{- range $index, $param := .Parameters }}{{if $index}}, {{end}}{{.Type}} {{.Name}}{{- end }}) {
+        {{- $method := . }}
+        {{- range .MethodBody }}
+        {{- if .IsDeclaration }}
+        {{ .Variable.Type }} {{ .Variable.Name }}{{ if .Variable.IsAttributeInitialized }} = {{ stringFormation .Variable.Type .Variable.Value }}{{ end }};
+        {{- else if .IsCondition }}
+        if({{ .Condition }}) {
+            {{- range .IfBody }}
+            {{- template "BodyTemplate" . }}
+            {{- end }}
+        }
+        {{- if .ElseBody }}
+        else {
+            {{- range .ElseBody }}
+            {{- template "BodyTemplate" . }}
+            {{- end }}
+        }
+        {{- end }}
+        {{- else if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else if .IsVariable }}
+		{{ $func := . }}
+		{{- with .Variable }}
+        {{ .Type }} {{ .Name }} = {{ $func.FunctionName }}({{- range $index, $param := $func.ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+		{{- end }}
+		{{- else }}
+        {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- end }}
+        {{- end }}
+
+        {{- if ne $method.ReturnType "void" }}
+		return {{ if .ReturnValue }}{{ .ReturnValue }}{{ else }}{{ defaultZero .ReturnType }}{{ end }};
+        {{ end }}
+
+    }
+{{- end }}
+
+}
+
+{{- define "BodyTemplate" }}
+	{{- if .IsDeclaration }}
+        {{- if .IsObjectCreation }}
+        {{ .ObjectType }} {{ .ObjectName }} = new {{ .ObjectType }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else if .FunctionName}}
+        {{ .Variable.Type }} {{ .Variable.Name }} = {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+        {{- else}}
+        {{ .Variable.Type }} {{ .Variable.Name }} = {{ stringFormation .Variable.Type .Variable.Value }};
+        {{- end }}
+    {{- else if .IsCondition }}
+        if({{ .Condition }}) {
+        {{- range .IfBody }}
+        {{- template "BodyTemplate" . }}
+        {{- end }}
+        }
+        {{- if .ElseBody }}
+        else {
+        {{- range .ElseBody }}
+        {{- template "BodyTemplate" . }}
+        {{- end }}
+        }
+        {{- end }}
+    {{- else }}
+        {{ .FunctionName }}({{- range $index, $param := .ObjFuncParameters }}{{- if $index }}, {{ end }}{{- if $param.Value }}{{ stringFormation $param.Type $param.Value }}{{ else }}{{ $param.Name }}{{ end }}{{- end }});
+    {{- end }}
+{{- end }}

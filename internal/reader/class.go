@@ -20,8 +20,8 @@ type Relationship struct {
 	LeftCardinality  string `@Cardinality?`
 	Type             string `@Relationship`
 	RightCardinality string `@Cardinality?`
-	RightClass       string `@Word Break?`
-	Label            string `( ":" @Word Break)?`
+	RightClass       string `@Word Break*`
+	Label            string `( ":" @Word Break+)?`
 }
 
 type ClassMember struct {
@@ -33,8 +33,8 @@ type ClassMember struct {
 
 type Operation struct {
 	Name       string       `@Word`
-	Parameters []*Parameter `"(" ( @@ ( "," @@ )* )? ")" Break?`
-	Return     string       `(@Word Break)?`
+	Parameters []*Parameter `"(" ( @@ ( "," @@ )* )? ")" Break*`
+	Return     string       `(@Word Break+)?`
 }
 
 type Parameter struct {
@@ -44,12 +44,12 @@ type Parameter struct {
 
 type Attribute struct {
 	Type string `( @Word (?= Word) )?`
-	Name string `@Word Break`
+	Name string `@Word Break+`
 }
 
 type Annotation struct {
 	Name  string `"<<" @Word ">>"`
-	Class string `@Word Break`
+	Class string `@Word Break+`
 }
 
 var (
